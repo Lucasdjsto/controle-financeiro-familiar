@@ -1,54 +1,48 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
-import os
+from sqlalchemy import create_engine, text
 
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# Caminho absoluto para garantir escrita do SQLite no Streamlit Cloud
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "financeiro.db")
+# Conexão Nativa do Streamlit com o Supabase (PostgreSQL)
+@st.cache_resource
+def get_db_engine():
+    db_url = st.secrets["postgres"]["url"]
+    return create_engine(db_url)
 
-# Inicialização do Banco de Dados SQLite
+engine = get_db_engine()
+
+# Inicialização das Tabelas no Supabase
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    # 1. Tabela de Receitas e Faturas de Cartão
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS projecao (
-            pessoa TEXT,
-            tipo TEXT,
-            item TEXT,
-            mes_ano TEXT,
-            valor REAL DEFAULT 0,
-            PRIMARY KEY (pessoa, tipo, item, mes_ano)
-        )
-    ''')
-    
-    # 2. Tabela de Gastos Fixos Recorrentes
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS gastos_fixos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pessoa TEXT,
-            item TEXT,
-            valor REAL DEFAULT 0
-        )
-    ''')
-    
-    # 3. Tabela de Gastos Pontuais em Dinheiro/PIX
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS pontuais_dinheiro (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            mes_ano TEXT,
-            pessoa TEXT,
-            descricao TEXT,
-            categoria TEXT,
-            valor REAL DEFAULT 0
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS projecao (
+                pessoa TEXT,
+                tipo TEXT,
+                item TEXT,
+                mes_ano TEXT,
+                valor DOUBLE PRECISION DEFAULT 0,
+                PRIMARY KEY (pessoa, tipo, item, mes_ano)
+            );
+        '''))
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS gastos_fixos (
+                id SERIAL PRIMARY KEY,
+                pessoa TEXT,
+                item TEXT,
+                valor DOUBLE PRECISION DEFAULT 0
+            );
+        '''))
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS pontuais_dinheiro (
+                id SERIAL PRIMARY KEY,
+                mes_ano TEXT,
+                pessoa TEXT,
+                descricao TEXT,
+                categoria TEXT,
+                valor DOUBLE PRECISION DEFAULT 0
+            );
+        '''))
 
 init_db()
 
@@ -58,7 +52,6 @@ MESES_PROJECAO = [
     "01.2027", "02.2027", "03.2027", "04.2027", "05.2027"
 ]
 
-# Estrutura Inicial
 ESTRUTURA_CARTÕES = {
     "Pessoa 1": ["C6 Carbon", "Nubank", "Santander"],
     "Pessoa 2": ["Banco do Brasil", "Rico / C6", "Amazon"]
@@ -69,61 +62,54 @@ ESTRUTURA_RECEITAS = {
     "Pessoa 2": ["Salário Base", "Receita Extra"]
 }
 
-# Funções Auxiliares de Banco de Dados
+# Funções com PostgreSQL
 def carregar_projecao(pessoa, tipo):
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql(f"SELECT * FROM projecao WHERE pessoa='{pessoa}' AND tipo='{tipo}'", conn)
-    conn.close()
-    return df
+    query = "SELECT * FROM projecao WHERE pessoa = :pessoa AND tipo = :tipo"
+    return pd.read_sql(text(query), engine, params={"pessoa": pessoa, "tipo": tipo})
 
 def salvar_projecao(pessoa, tipo, df_editado):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    for _, row in df_editado.iterrows():
-        item = row['Item']
-        for mes in MESES_PROJECAO:
-            val = float(row[mes]) if pd.notnull(row[mes]) else 0.0
-            c.execute('''
-                INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(pessoa, tipo, item, mes_ano) DO UPDATE SET valor=excluded.valor
-            ''', (pessoa, tipo, item, mes, val))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        for _, row in df_editado.iterrows():
+            item = row['Item']
+            for mes in MESES_PROJECAO:
+                val = float(row[mes]) if pd.notnull(row[mes]) else 0.0
+                query = '''
+                    INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
+                    VALUES (:pessoa, :tipo, :item, :mes, :val)
+                    ON CONFLICT (pessoa, tipo, item, mes_ano) 
+                    DO UPDATE SET valor = EXCLUDED.valor;
+                '''
+                conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes, "val": val})
 
 def carregar_fixos(pessoa):
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql(f"SELECT id, item, valor FROM gastos_fixos WHERE pessoa='{pessoa}'", conn)
-    conn.close()
-    return df
+    query = "SELECT id, item, valor FROM gastos_fixos WHERE pessoa = :pessoa"
+    return pd.read_sql(text(query), engine, params={"pessoa": pessoa})
 
 def salvar_fixos(pessoa, df_editado):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute(f"DELETE FROM gastos_fixos WHERE pessoa='{pessoa}'")
-    for _, row in df_editado.iterrows():
-        if str(row['item']).strip():
-            c.execute("INSERT INTO gastos_fixos (pessoa, item, valor) VALUES (?, ?, ?)",
-                      (pessoa, str(row['item']), float(row['valor'])))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa"), {"pessoa": pessoa})
+        for _, row in df_editado.iterrows():
+            if str(row['item']).strip():
+                query = "INSERT INTO gastos_fixos (pessoa, item, valor) VALUES (:pessoa, :item, :val)"
+                conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "val": float(row['valor'])})
 
 def carregar_pontuais(mes_ano):
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql(f"SELECT id, pessoa, descricao, categoria, valor FROM pontuais_dinheiro WHERE mes_ano='{mes_ano}'", conn)
-    conn.close()
-    return df
+    query = "SELECT id, pessoa, descricao, categoria, valor FROM pontuais_dinheiro WHERE mes_ano = :mes_ano"
+    return pd.read_sql(text(query), engine, params={"mes_ano": mes_ano})
 
 def salvar_pontuais(mes_ano, df_editado):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute(f"DELETE FROM pontuais_dinheiro WHERE mes_ano='{mes_ano}'")
-    for _, row in df_editado.iterrows():
-        if str(row['descricao']).strip():
-            c.execute("INSERT INTO pontuais_dinheiro (mes_ano, pessoa, descricao, categoria, valor) VALUES (?, ?, ?, ?, ?)",
-                      (mes_ano, str(row['pessoa']), str(row['descricao']), str(row['categoria']), float(row['valor'])))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM pontuais_dinheiro WHERE mes_ano = :mes_ano"), {"mes_ano": mes_ano})
+        for _, row in df_editado.iterrows():
+            if str(row['descricao']).strip():
+                query = "INSERT INTO pontuais_dinheiro (mes_ano, pessoa, descricao, categoria, valor) VALUES (:mes_ano, :pessoa, :desc, :cat, :val)"
+                conn.execute(text(query), {
+                    "mes_ano": mes_ano, 
+                    "pessoa": str(row['pessoa']), 
+                    "desc": str(row['descricao']), 
+                    "cat": str(row['categoria']), 
+                    "val": float(row['valor'])
+                })
 
 # INTERFACE PRINCIPAL
 st.title("📊 Painel Financeiro Integrado & Projeção")
@@ -153,7 +139,7 @@ def renderizar_pessoa(pessoa):
     )
     if st.button(f"💾 Salvar Receitas - {pessoa}"):
         salvar_projecao(pessoa, "RECEITA", df_rec_edit)
-        st.success("Receitas salvas!")
+        st.success("Receitas salvas no banco de dados definitivo!")
         st.rerun()
 
     st.divider()
@@ -175,7 +161,7 @@ def renderizar_pessoa(pessoa):
     )
     if st.button(f"💾 Salvar Cartões - {pessoa}"):
         salvar_projecao(pessoa, "CARTAO", df_cart_edit)
-        st.success("Cartões salvos!")
+        st.success("Cartões salvos no banco de dados definitivo!")
         st.rerun()
 
     st.divider()
@@ -191,7 +177,7 @@ def renderizar_pessoa(pessoa):
     )
     if st.button(f"💾 Salvar Gastos Fixos - {pessoa}"):
         salvar_fixos(pessoa, df_fixos_edit)
-        st.success("Gastos fixos salvos!")
+        st.success("Gastos fixos salvos no banco de dados definitivo!")
         st.rerun()
 
     return df_rec_edit, df_cart_edit, df_fixos_edit
@@ -221,7 +207,7 @@ with tab_pontuais:
     )
     if st.button("💾 Salvar Gastos Pontuais"):
         salvar_pontuais(mes_pontual, df_pontuais_edit)
-        st.success(f"Gastos pontuais para {mes_pontual} atualizados!")
+        st.success(f"Gastos pontuais de {mes_pontual} salvos no banco de dados definitivo!")
         st.rerun()
 
 with tab_consolidado:
@@ -239,8 +225,8 @@ with tab_consolidado:
             totais[mes]["cart_p2"] = cart_p2[mes].sum()
             
             df_p = carregar_pontuais(mes)
-            totais[mes]["pont_p1"] = df_p[df_p['pessoa'] == 'Pessoa 1']['valor'].sum()
-            totais[mes]["pont_p2"] = df_p[df_p['pessoa'] == 'Pessoa 2']['valor'].sum()
+            totais[mes]["pont_p1"] = df_p[df_p['pessoa'] == 'Pessoa 1']['valor'].sum() if not df_p.empty else 0
+            totais[mes]["pont_p2"] = df_p[df_p['pessoa'] == 'Pessoa 2']['valor'].sum() if not df_p.empty else 0
             
         return totais
 
