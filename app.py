@@ -5,6 +5,34 @@ from sqlalchemy import create_engine, text
 
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
+# --- CONTROLE DE ACESSO / AUTENTICAÇÃO ---
+def verificar_senha():
+    if "autenticado" not in st.session_state:
+        st.session_state["autenticado"] = False
+
+    if st.session_state["autenticado"]:
+        return True
+
+    st.title("🔒 Acesso Restrito - Gestão Financeira")
+    senha_correta = os.getenv("APP_PASSWORD", "123456")  # Valor padrão de segurança
+    
+    with st.form("form_login"):
+        senha_digitada = st.text_input("Digite a senha de acesso:", type="password")
+        botao_entrar = st.form_submit_button("Entrar")
+        
+        if botao_entrar:
+            if senha_digitada == senha_correta:
+                st.session_state["autenticado"] = True
+                st.success("Acesso liberado!")
+                st.rerun()
+            else:
+                st.error("Senha incorreta! Tente novamente.")
+    return False
+
+if not verificar_senha():
+    st.stop()
+
+# --- CONEXÃO COM BANCO DE DADOS SUPABASE ---
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL")
@@ -114,7 +142,14 @@ def salvar_pontuais(mes_ano, df_editado):
                     "val": float(row['valor'])
                 })
 
-st.title("📊 Painel Financeiro Integrado & Projeção")
+# --- INTERFACE PRINCIPAL ---
+col_head, col_logout = st.columns([8, 2])
+with col_head:
+    st.title("📊 Painel Financeiro Integrado & Projeção")
+with col_logout:
+    if st.button("🚪 Sair"):
+        st.session_state["autenticado"] = False
+        st.rerun()
 
 tab_p1, tab_p2, tab_pontuais, tab_consolidado = st.tabs([
     "👤 Pessoa 1 (Lucas)", 
