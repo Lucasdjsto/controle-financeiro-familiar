@@ -1,15 +1,19 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import os
 
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
+# Caminho absoluto para garantir escrita do SQLite no Streamlit Cloud
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "financeiro.db")
+
 # Inicialização do Banco de Dados SQLite
 def init_db():
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # 1. Tabela de Receitas e Faturas de Cartão (Projeção por Mês)
+    # 1. Tabela de Receitas e Faturas de Cartão
     c.execute('''
         CREATE TABLE IF NOT EXISTS projecao (
             pessoa TEXT,
@@ -21,17 +25,17 @@ def init_db():
         )
     ''')
     
-    # 2. Tabela de Gastos Fixos Recorrentes (Automático para todos os meses)
+    # 2. Tabela de Gastos Fixos Recorrentes
     c.execute('''
         CREATE TABLE IF NOT EXISTS gastos_fixos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             pessoa TEXT,
             item TEXT,
-            valor DEFAULT 0
+            valor REAL DEFAULT 0
         )
     ''')
     
-    # 3. Tabela de Gastos Pontuais em Dinheiro/PIX (Mês Corrente)
+    # 3. Tabela de Gastos Pontuais em Dinheiro/PIX
     c.execute('''
         CREATE TABLE IF NOT EXISTS pontuais_dinheiro (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,7 +58,7 @@ MESES_PROJECAO = [
     "01.2027", "02.2027", "03.2027", "04.2027", "05.2027"
 ]
 
-# Estrutura Inicial de Cartões e Receitas
+# Estrutura Inicial
 ESTRUTURA_CARTÕES = {
     "Pessoa 1": ["C6 Carbon", "Nubank", "Santander"],
     "Pessoa 2": ["Banco do Brasil", "Rico / C6", "Amazon"]
@@ -67,13 +71,13 @@ ESTRUTURA_RECEITAS = {
 
 # Funções Auxiliares de Banco de Dados
 def carregar_projecao(pessoa, tipo):
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql(f"SELECT * FROM projecao WHERE pessoa='{pessoa}' AND tipo='{tipo}'", conn)
     conn.close()
     return df
 
 def salvar_projecao(pessoa, tipo, df_editado):
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     for _, row in df_editado.iterrows():
         item = row['Item']
@@ -88,13 +92,13 @@ def salvar_projecao(pessoa, tipo, df_editado):
     conn.close()
 
 def carregar_fixos(pessoa):
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql(f"SELECT id, item, valor FROM gastos_fixos WHERE pessoa='{pessoa}'", conn)
     conn.close()
     return df
 
 def salvar_fixos(pessoa, df_editado):
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute(f"DELETE FROM gastos_fixos WHERE pessoa='{pessoa}'")
     for _, row in df_editado.iterrows():
@@ -105,13 +109,13 @@ def salvar_fixos(pessoa, df_editado):
     conn.close()
 
 def carregar_pontuais(mes_ano):
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql(f"SELECT id, pessoa, descricao, categoria, valor FROM pontuais_dinheiro WHERE mes_ano='{mes_ano}'", conn)
     conn.close()
     return df
 
 def salvar_pontuais(mes_ano, df_editado):
-    conn = sqlite3.connect("financeiro.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute(f"DELETE FROM pontuais_dinheiro WHERE mes_ano='{mes_ano}'")
     for _, row in df_editado.iterrows():
@@ -132,7 +136,6 @@ tab_p1, tab_p2, tab_pontuais, tab_consolidado = st.tabs([
 ])
 
 def renderizar_pessoa(pessoa):
-    # 1. RECEITAS
     st.subheader("💵 1. Receitas (Salário e Rendimentos)")
     df_rec_db = carregar_projecao(pessoa, "RECEITA")
     rows_rec = []
@@ -155,7 +158,6 @@ def renderizar_pessoa(pessoa):
 
     st.divider()
 
-    # 2. EVOLUÇÃO DE CARTÕES DE CRÉDITO
     st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
     df_cart_db = carregar_projecao(pessoa, "CARTAO")
     rows_cart = []
@@ -178,9 +180,7 @@ def renderizar_pessoa(pessoa):
 
     st.divider()
 
-    # 3. GASTOS FIXOS RECORRENTES
     st.subheader("📌 3. Gastos Fixos Recorrentes (Previsão Mensal Automática)")
-    st.caption("Cadastre aqui despesas fixas como Aluguel, Condomínio, Financiamentos. O valor será replicado em todos os meses.")
     df_fixos_db = carregar_fixos(pessoa)
     df_fixos_edit = st.data_editor(
         df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fixos_{pessoa}",
@@ -202,12 +202,9 @@ with tab_p1:
 with tab_p2:
     rec_p2, cart_p2, fixos_p2 = renderizar_pessoa("Pessoa 2")
 
-# ABA GASTOS PONTUAIS DO MÊS CORRENTE
 with tab_pontuais:
     st.header("💸 Gastos Pontuais em Dinheiro e PIX (Mês Corrente)")
-    st.caption("Registre gastos variáveis do dia a dia. Eles se aplicam exclusivamente ao mês selecionado.")
-    
-    col_sel_p, col_v = st.columns([2, 3])
+    col_sel_p, _ = st.columns([2, 3])
     with col_sel_p:
         mes_pontual = st.selectbox("Selecione o Mês de Trabalho:", MESES_PROJECAO, index=0)
         
@@ -227,11 +224,9 @@ with tab_pontuais:
         st.success(f"Gastos pontuais para {mes_pontual} atualizados!")
         st.rerun()
 
-# ABA VISÃO CONSOLIDADA E TOTAL GERAL
 with tab_consolidado:
     st.header("🏠 Visão Consolidada da Família")
     
-    # Processamento de Dados
     def extrair_totais_completos():
         totais = {mes: {"rec_p1": 0, "cart_p1": 0, "fixos_p1": fixos_p1['valor'].sum(),
                         "rec_p2": 0, "cart_p2": 0, "fixos_p2": fixos_p2['valor'].sum(),
@@ -256,17 +251,14 @@ with tab_consolidado:
     
     t_foco = totais_gerais[mes_foco]
     
-    # Totais P1
     r_p1 = t_foco["rec_p1"]
     d_p1 = t_foco["cart_p1"] + t_foco["fixos_p1"] + t_foco["pont_p1"]
     s_p1 = r_p1 - d_p1
     
-    # Totais P2
     r_p2 = t_foco["rec_p2"]
     d_p2 = t_foco["cart_p2"] + t_foco["fixos_p2"] + t_foco["pont_p2"]
     s_p2 = r_p2 - d_p2
     
-    # Totais Família
     r_fam = r_p1 + r_p2
     d_fam = d_p1 + d_p2
     s_fam = r_fam - d_fam
@@ -292,7 +284,6 @@ with tab_consolidado:
 
     st.divider()
 
-    # QUADRO COMPARATIVO COMPLETO + TOTAL GERAL
     st.subheader("📅 Projeção Evolutiva Mês a Mês & Total Geral Acumulado")
     
     row_rec = {"Métrica": "Renda Total Família"}
@@ -336,5 +327,3 @@ with tab_consolidado:
     cols_conf["TOTAL GERAL"] = st.column_config.NumberColumn("TOTAL GERAL PERÍODO", format="R$ %.2f")
 
     st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf)
-
-    st.info(f"💡 **Consolidado Acumulado:** A renda total prevista no período é de **R$ {tot_rec_g:,.2f}**, as despesas totais são de **R$ {tot_desp_g:,.2f}**, resultando em um saldo positivo geral acumulado de **R$ {tot_rec_g - tot_desp_g:,.2f}**.")
