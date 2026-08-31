@@ -3,9 +3,38 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+# 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# --- CONTROLE DE ACESSO / AUTENTICAÇÃO ---
+# 2. Injeção de CSS para Otimização Mobile (Celulares)
+st.markdown("""
+    <style>
+        /* Reduz o espaçamento excessivo nas bordas da tela em dispositivos móveis */
+        .block-container {
+            padding-top: 1.2rem !important;
+            padding-bottom: 1.5rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        
+        /* Ajuste de tipografia responsiva para telas pequenas */
+        @media (max-width: 640px) {
+            h1 { font-size: 1.5rem !important; }
+            h2 { font-size: 1.2rem !important; }
+            h3 { font-size: 1.0rem !important; }
+            
+            /* Compacta métricas e tabelas no celular */
+            [data-testid="stMetricValue"] {
+                font-size: 1.2rem !important;
+            }
+            .stDataFrame {
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# 3. Controle de Acesso e Autenticação por Senha
 def verificar_senha():
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
@@ -14,7 +43,7 @@ def verificar_senha():
         return True
 
     st.title("🔒 Acesso Restrito - Gestão Financeira")
-    senha_correta = os.getenv("APP_PASSWORD", "123456")  # Valor padrão de segurança
+    senha_correta = os.getenv("APP_PASSWORD", "123456")
     
     with st.form("form_login"):
         senha_digitada = st.text_input("Digite a senha de acesso:", type="password")
@@ -32,7 +61,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# --- CONEXÃO COM BANCO DE DADOS SUPABASE ---
+# 4. Conexão com o Banco de Dados Supabase (PostgreSQL)
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL")
@@ -45,7 +74,7 @@ def get_db_engine():
 
 engine = get_db_engine()
 
-# Inicialização das Tabelas no Supabase
+# 5. Inicialização das Tabelas no Banco
 def init_db():
     with engine.begin() as conn:
         conn.execute(text('''
@@ -79,6 +108,7 @@ def init_db():
 
 init_db()
 
+# 6. Constantes e Estruturas
 MESES_PROJECAO = [
     "08.2026", "09.2026", "10.2026", "11.2026", "12.2026",
     "01.2027", "02.2027", "03.2027", "04.2027", "05.2027"
@@ -94,6 +124,7 @@ ESTRUTURA_RECEITAS = {
     "Pessoa 2": ["Salário Base", "Receita Extra"]
 }
 
+# 7. Funções de Persistência no Banco
 def carregar_projecao(pessoa, tipo):
     query = "SELECT * FROM projecao WHERE pessoa = :pessoa AND tipo = :tipo"
     return pd.read_sql(text(query), engine, params={"pessoa": pessoa, "tipo": tipo})
@@ -142,7 +173,7 @@ def salvar_pontuais(mes_ano, df_editado):
                     "val": float(row['valor'])
                 })
 
-# --- INTERFACE PRINCIPAL ---
+# 8. Cabecalho e Logout
 col_head, col_logout = st.columns([8, 2])
 with col_head:
     st.title("📊 Painel Financeiro Integrado & Projeção")
@@ -151,6 +182,7 @@ with col_logout:
         st.session_state["autenticado"] = False
         st.rerun()
 
+# 9. Interface do Aplicativo (Abas)
 tab_p1, tab_p2, tab_pontuais, tab_consolidado = st.tabs([
     "👤 Pessoa 1 (Lucas)", 
     "👤 Pessoa 2 (Marcella)", 
@@ -176,7 +208,7 @@ def renderizar_pessoa(pessoa):
     )
     if st.button(f"💾 Salvar Receitas - {pessoa}"):
         salvar_projecao(pessoa, "RECEITA", df_rec_edit)
-        st.success("Receitas salvas no banco de dados definitivo!")
+        st.success("Receitas salvas com sucesso!")
         st.rerun()
 
     st.divider()
@@ -198,12 +230,12 @@ def renderizar_pessoa(pessoa):
     )
     if st.button(f"💾 Salvar Cartões - {pessoa}"):
         salvar_projecao(pessoa, "CARTAO", df_cart_edit)
-        st.success("Cartões salvos no banco de dados definitivo!")
+        st.success("Cartões salvos com sucesso!")
         st.rerun()
 
     st.divider()
 
-    st.subheader("📌 3. Gastos Fixos Recorrentes (Previsão Mensal Automática)")
+    st.subheader("📌 3. Gastos Fixos Recorrentes")
     df_fixos_db = carregar_fixos(pessoa)
     df_fixos_edit = st.data_editor(
         df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fixos_{pessoa}",
@@ -214,7 +246,7 @@ def renderizar_pessoa(pessoa):
     )
     if st.button(f"💾 Salvar Gastos Fixos - {pessoa}"):
         salvar_fixos(pessoa, df_fixos_edit)
-        st.success("Gastos fixos salvos no banco de dados definitivo!")
+        st.success("Gastos fixos salvos com sucesso!")
         st.rerun()
 
     return df_rec_edit, df_cart_edit, df_fixos_edit
@@ -226,10 +258,10 @@ with tab_p2:
     rec_p2, cart_p2, fixos_p2 = renderizar_pessoa("Pessoa 2")
 
 with tab_pontuais:
-    st.header("💸 Gastos Pontuais em Dinheiro e PIX (Mês Corrente)")
+    st.header("💸 Gastos Pontuais em Dinheiro/PIX")
     col_sel_p, _ = st.columns([2, 3])
     with col_sel_p:
-        mes_pontual = st.selectbox("Selecione o Mês de Trabalho:", MESES_PROJECAO, index=0)
+        mes_pontual = st.selectbox("Selecione o Mês:", MESES_PROJECAO, index=0)
         
     df_pontuais_db = carregar_pontuais(mes_pontual)
     
@@ -244,7 +276,7 @@ with tab_pontuais:
     )
     if st.button("💾 Salvar Gastos Pontuais"):
         salvar_pontuais(mes_pontual, df_pontuais_edit)
-        st.success(f"Gastos pontuais de {mes_pontual} salvos no banco de dados definitivo!")
+        st.success(f"Gastos pontuais de {mes_pontual} salvos com sucesso!")
         st.rerun()
 
 with tab_consolidado:
@@ -270,7 +302,7 @@ with tab_consolidado:
     totais_gerais = extrair_totais_completos()
 
     st.subheader("📌 Análise Detalhada do Mês Selecionado")
-    mes_foco = st.selectbox("Selecione o mês para examinar em detalhe:", MESES_PROJECAO, index=0)
+    mes_foco = st.selectbox("Selecione o mês:", MESES_PROJECAO, index=0)
     
     t_foco = totais_gerais[mes_foco]
     
@@ -307,7 +339,7 @@ with tab_consolidado:
 
     st.divider()
 
-    st.subheader("📅 Projeção Evolutiva Mês a Mês & Total Geral Acumulado")
+    st.subheader("📅 Projeção Evolutiva Mês a Mês & Total Geral")
     
     row_rec = {"Métrica": "Renda Total Família"}
     row_cart = {"Métrica": "Despesas Cartões"}
