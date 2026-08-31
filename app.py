@@ -114,11 +114,17 @@ def init_db():
 
 init_db()
 
-# 6. Constantes e Estruturas
-MESES_PROJECAO = [
-    "08.2026", "09.2026", "10.2026", "11.2026", "12.2026",
-    "01.2027", "02.2027", "03.2027", "04.2027", "05.2027"
-]
+# 6. Constantes e Estruturas Dinâmicas (Projeção até 2030)
+def gerar_meses_projecao(ano_inicio=2026, mes_inicio=8, ano_fim=2030, mes_fim=12):
+    meses = []
+    for ano in range(ano_inicio, ano_fim + 1):
+        m_start = mes_inicio if ano == ano_inicio else 1
+        m_end = mes_fim if ano == ano_fim else 12
+        for mes in range(m_start, m_end + 1):
+            meses.append(f"{mes:02d}.{ano}")
+    return meses
+
+MESES_PROJECAO = gerar_meses_projecao()
 
 ESTRUTURA_CARTÕES = {
     "Pessoa 1": ["C6 Carbon", "Nubank", "Santander"],
@@ -230,11 +236,19 @@ def renderizar_pessoa(pessoa):
     st.subheader("💵 1. Receitas (Salário e Rendimentos)")
     df_rec_db = carregar_projecao(pessoa, "RECEITA")
     rows_rec = []
+    
     for item in ESTRUTURA_RECEITAS[pessoa]:
         row_dict = {"Item": item}
         for mes in MESES_PROJECAO:
             val = df_rec_db[(df_rec_db['item'] == item) & (df_rec_db['mes_ano'] == mes)]['valor']
-            row_dict[mes] = float(val.iloc[0]) if not val.empty else 0.0
+            
+            # Lê o valor gravado individualmente para o mês.
+            # Se a célula não tiver registro, usa o valor de partida de R$ 12.500,00.
+            if not val.empty and pd.notnull(val.iloc[0]):
+                row_dict[mes] = float(val.iloc[0])
+            else:
+                row_dict[mes] = 12500.0 if item == "Salário Base" else 0.0
+                
         rows_rec.append(row_dict)
     
     df_rec_grid = pd.DataFrame(rows_rec)
@@ -244,7 +258,7 @@ def renderizar_pessoa(pessoa):
     )
     if st.button(f"💾 Salvar Receitas - {pessoa}"):
         salvar_projecao(pessoa, "RECEITA", df_rec_edit)
-        st.success("Receitas salvas com sucesso!")
+        st.success("Receitas salvas individualmente com sucesso!")
         st.rerun()
 
     st.divider()
