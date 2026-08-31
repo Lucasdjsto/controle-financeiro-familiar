@@ -52,9 +52,6 @@ def verificar_senha():
                 st.error("Senha incorreta! Tente novamente.")
     return False
 
-if not verificar_senha():
-    st.stop()
-
 # 4. Conexão com o Banco de Dados Supabase (PostgreSQL)
 @st.cache_resource
 def get_db_engine():
