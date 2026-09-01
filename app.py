@@ -16,7 +16,6 @@ st.markdown("""
             padding-right: 0.8rem !important;
         }
         
-        /* Container Flexbox Responsivo para o Painel Superior */
         .metrics-container {
             display: flex;
             flex-wrap: wrap;
@@ -25,14 +24,13 @@ st.markdown("""
             margin-bottom: 1rem;
         }
         
-        /* Card Individual Responsivo */
         .metric-card {
             background-color: #1e293b;
             border: 1px solid #334155;
             border-radius: 10px;
             padding: 14px;
-            flex: 1 1 calc(20% - 12px); /* Tenta ocupar 20% no PC (5 cards por linha) */
-            min-width: 180px; /* Garante tamanho mínimo sem espremer */
+            flex: 1 1 calc(20% - 12px);
+            min-width: 180px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         
@@ -63,15 +61,14 @@ st.markdown("""
             font-weight: 600;
         }
 
-        /* Adaptação Automática para Telas Menores e Celular */
         @media (max-width: 1024px) {
             .metric-card {
-                flex: 1 1 calc(33.33% - 12px); /* 3 por linha em tablets */
+                flex: 1 1 calc(33.33% - 12px);
             }
         }
         @media (max-width: 640px) {
             .metric-card {
-                flex: 1 1 100%; /* 1 por linha no celular */
+                flex: 1 1 100%;
             }
             .metric-value {
                 font-size: 1.2rem;
@@ -181,14 +178,6 @@ def init_db():
                 valor DOUBLE PRECISION DEFAULT 0
             );
         '''))
-        conn.execute(text('''
-            CREATE TABLE IF NOT EXISTS dinheiro_provisionado (
-                id SERIAL PRIMARY KEY,
-                pessoa TEXT,
-                descricao TEXT,
-                valor DOUBLE PRECISION DEFAULT 0
-            );
-        '''))
 
 init_db()
 
@@ -258,11 +247,6 @@ def carregar_programado_cartao(pessoa):
     query = "SELECT id, cartao, descricao, valor FROM programado_cartao WHERE pessoa = :pessoa"
     return pd.read_sql(text(query), engine, params={"pessoa": pessoa})
 
-@st.cache_data(ttl=600)
-def carregar_dinheiro_provisionado(pessoa):
-    query = "SELECT id, descricao, valor FROM dinheiro_provisionado WHERE pessoa = :pessoa"
-    return pd.read_sql(text(query), engine, params={"pessoa": pessoa})
-
 # 8. Funções de Escrita
 def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
     with engine.begin() as conn:
@@ -329,15 +313,7 @@ def salvar_programado_cartao(pessoa, df_editado):
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": str(row['cartao']), "desc": str(row['descricao']), "val": float(row['valor'])})
 
-def salvar_dinheiro_provisionado(pessoa, df_editado):
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM dinheiro_provisionado WHERE pessoa = :pessoa"), {"pessoa": pessoa})
-        for _, row in df_editado.iterrows():
-            if str(row['descricao']).strip():
-                query = "INSERT INTO dinheiro_provisionado (pessoa, descricao, valor) VALUES (:pessoa, :desc, :val)"
-                conn.execute(text(query), {"pessoa": pessoa, "desc": str(row['descricao']), "val": float(row['valor'])})
-
-# 9. LÓGICA DE CÁLCULO DE CAIXA COMPLETA
+# 9. LÓGICA DE CÁLCULO DE CAIXA UNIFICADA
 def calcular_sequencia_financeira():
     rec_all_db = carregar_todas_projecoes("RECEITA")
     cart_all_db = carregar_todas_projecoes("CARTAO")
@@ -345,7 +321,6 @@ def calcular_sequencia_financeira():
     prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].sum()
     prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].sum()
     
-    tot_prov_din = carregar_dinheiro_provisionado("Pessoa 1")['valor'].sum() + carregar_dinheiro_provisionado("Pessoa 2")['valor'].sum()
     tot_fixos = carregar_fixos("Pessoa 1")['valor'].sum() + carregar_fixos("Pessoa 2")['valor'].sum() + carregar_comuns()['valor'].sum()
     
     caixinha_df = carregar_caixinha()
@@ -365,7 +340,7 @@ def calcular_sequencia_financeira():
         
         caixinha_mes = caixinha_df[caixinha_df['mes_ano'] == m]['valor'].sum() if not caixinha_df.empty else 0.0
 
-        saidas_mes = cartao_mes + tot_fixos + pontual_mes + tot_prov_din + caixinha_mes
+        saidas_mes = cartao_mes + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
@@ -396,13 +371,11 @@ with col_save_all:
         if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
         if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"])
         if "prog_p1_df" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1_df"])
-        if "prov_p1_df" in st.session_state: salvar_dinheiro_provisionado("Pessoa 1", st.session_state["prov_p1_df"])
 
         if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"])
         if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"])
         if "fix_p2_df" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2_df"])
         if "prog_p2_df" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2_df"])
-        if "prov_p2_df" in st.session_state: salvar_dinheiro_provisionado("Pessoa 2", st.session_state["prov_p2_df"])
 
         if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"])
         if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"])
@@ -431,7 +404,7 @@ st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros[mes_atual]
 
-# PAINEL DINÂMICO (FLEXBOX ADAPTATIVO EM HTML/CSS)
+# PAINEL DINÂMICO
 st.markdown(f"#### ⚡ Resumo Financeiro - {mes_atual}")
 
 s_final = d_foco['saldo_acumulado_final']
@@ -539,19 +512,6 @@ def renderizar_pessoa(pessoa, p_code):
     )
     st.session_state[f"fix_{p_code}_df"] = df_fixos_edit
 
-    st.divider()
-
-    st.subheader("💵 5. PIX / Dinheiro Certo (Desconto Automático da Renda)")
-    df_prov_din = carregar_dinheiro_provisionado(pessoa)
-    df_prov_edit = st.data_editor(
-        df_prov_din, num_rows="dynamic", use_container_width=True, key=f"prov_{p_code}",
-        column_config={
-            "descricao": st.column_config.TextColumn("Descrição (ex: Barbeiro, Feira)"),
-            "valor": st.column_config.NumberColumn("Valor Previsto (R$)", format="R$ %.2f", min_value=0.0)
-        }
-    )
-    st.session_state[f"prov_{p_code}_df"] = df_prov_edit
-
 with tab_p1:
     renderizar_pessoa("Pessoa 1", "p1")
 
@@ -571,7 +531,7 @@ with tab_comuns:
     st.session_state["comuns_df"] = df_comuns_edit
 
 with tab_pontuais:
-    st.header("💸 Gastos Pontuais em Dinheiro/PIX (Imprevistos do Mês)")
+    st.header("💸 Gastos Pontuais e PIX do Mês (Central Unificada)")
     col_sel_p, _ = st.columns([2, 3])
     with col_sel_p:
         mes_pontual = st.selectbox("Selecione o Mês:", TODOS_MESES_SISTEMA[:24], index=idx_foco)
@@ -581,16 +541,16 @@ with tab_pontuais:
     df_pontuais_edit = st.data_editor(
         df_pontuais_db, num_rows="dynamic", use_container_width=True, key="pontuais_editor",
         column_config={
-            "pessoa": st.column_config.SelectboxColumn("Pessoa", options=["Pessoa 1", "Pessoa 2", "Comum / Casa"]),
-            "descricao": st.column_config.TextColumn("Descrição do Gasto"),
-            "categoria": st.column_config.SelectboxColumn("Categoria", options=["Mercado", "Padaria", "Transporte", "Lazer", "Farmácia", "Outros"]),
+            "pessoa": st.column_config.SelectboxColumn("Origem/Pessoa", options=["Pessoa 1", "Pessoa 2", "Comum / Casa"]),
+            "descricao": st.column_config.TextColumn("Descrição do Gasto / PIX"),
+            "categoria": st.column_config.SelectboxColumn("Categoria", options=["Barbeiro / Estética", "Feira / Mercado", "Transporte", "Lazer", "Farmácia", "Outros"]),
             "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0)
         }
     )
     if st.button("💾 Salvar Gastos Pontuais do Mês"):
         salvar_pontuais(mes_pontual, df_pontuais_edit)
         st.cache_data.clear()
-        st.success(f"Gastos pontuais de {mes_pontual} salvos!")
+        st.success(f"Gastos pontuais de {mes_pontual} salvos com sucesso!")
         st.rerun()
 
 with tab_consolidado:
