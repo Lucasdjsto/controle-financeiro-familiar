@@ -6,88 +6,81 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Otimizado (Fluido para PC e Celular)
+# 2. Injeção de CSS para Tabelas Compactas e Layout Fluido
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 1.0rem !important;
-            padding-bottom: 1.5rem !important;
-            padding-left: 0.8rem !important;
-            padding-right: 0.8rem !important;
+            padding-top: 0.8rem !important;
+            padding-bottom: 1.2rem !important;
+            padding-left: 0.6rem !important;
+            padding-right: 0.6rem !important;
+        }
+        
+        /* Tabelas e DataEditors Ultra Compactos */
+        [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
+            font-size: 0.82rem !important;
+        }
+        
+        .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
+            padding: 2px 6px !important;
         }
         
         .metrics-container {
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 10px;
             width: 100%;
-            margin-bottom: 0.8rem;
+            margin-bottom: 0.6rem;
         }
         
         .metric-card {
             background-color: #1e293b;
             border: 1px solid #334155;
-            border-radius: 10px;
-            padding: 12px 14px;
-            flex: 1 1 calc(20% - 12px);
-            min-width: 170px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            padding: 10px 12px;
+            flex: 1 1 calc(20% - 10px);
+            min-width: 160px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .metric-card-sub {
             background-color: #0f172a;
             border: 1px dashed #475569;
-            border-radius: 10px;
-            padding: 10px 12px;
-            flex: 1 1 calc(25% - 12px);
-            min-width: 160px;
+            border-radius: 8px;
+            padding: 8px 10px;
+            flex: 1 1 calc(25% - 10px);
+            min-width: 150px;
         }
         
         .metric-label {
-            font-size: 0.82rem;
+            font-size: 0.78rem;
             color: #94a3b8;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
             font-weight: 500;
         }
         
         .metric-value {
-            font-size: 1.25rem;
+            font-size: 1.15rem;
             font-weight: 700;
             color: #f8fafc;
         }
         
-        .delta-positive {
-            color: #4ade80;
-            font-size: 0.78rem;
-            margin-top: 3px;
-            font-weight: 600;
-        }
-        
-        .delta-negative {
-            color: #f87171;
-            font-size: 0.78rem;
-            margin-top: 3px;
-            font-weight: 600;
-        }
+        .delta-positive { color: #4ade80; font-size: 0.75rem; font-weight: 600; }
+        .delta-negative { color: #f87171; font-size: 0.75rem; font-weight: 600; }
 
         .stButton > button {
-            border-radius: 8px;
+            border-radius: 6px;
             font-weight: 600;
-            padding: 6px 16px;
+            padding: 4px 12px;
+            font-size: 0.85rem;
         }
 
         @media (max-width: 1024px) {
-            .metric-card, .metric-card-sub {
-                flex: 1 1 calc(33.33% - 12px);
-            }
+            .metric-card, .metric-card-sub { flex: 1 1 calc(33.33% - 10px); }
         }
         @media (max-width: 640px) {
-            .metric-card, .metric-card-sub {
-                flex: 1 1 100%;
-            }
-            .metric-value {
-                font-size: 1.15rem;
-            }
+            .metric-card, .metric-card-sub { flex: 1 1 100%; }
+            .metric-value { font-size: 1.1rem; }
         }
     </style>
 """, unsafe_allow_html=True)
@@ -119,7 +112,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão Antibloqueio e Otimizada com o Banco de Dados (Anti Stale/SSL Timeout)
+# 4. Conexão Anti-Bloqueio
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -133,8 +126,8 @@ def get_db_engine():
         db_url,
         pool_size=5,
         max_overflow=5,
-        pool_recycle=60, # Descarta conexões velhas presas a cada 60s
-        pool_pre_ping=True, # Testa se a conexão caiu antes de executar query
+        pool_recycle=60,
+        pool_pre_ping=True,
         connect_args={"connect_timeout": 10}
     )
 
@@ -193,6 +186,14 @@ def init_db():
                     cartao TEXT,
                     descricao TEXT,
                     valor DOUBLE PRECISION DEFAULT 0
+                );
+            '''))
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS status_faturas (
+                    pessoa TEXT,
+                    mes_ano TEXT,
+                    fechada BOOLEAN DEFAULT FALSE,
+                    PRIMARY KEY (pessoa, mes_ano)
                 );
             '''))
     except Exception as e:
@@ -264,6 +265,11 @@ def carregar_programado_cartao(pessoa):
     query = "SELECT id, cartao, descricao, valor FROM programado_cartao WHERE pessoa = :pessoa"
     return pd.read_sql(text(query), engine, params={"pessoa": pessoa})
 
+@st.cache_data(ttl=300)
+def carregar_status_faturas():
+    query = "SELECT * FROM status_faturas"
+    return pd.read_sql(text(query), engine)
+
 # 8. Funções de Escrita
 def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
     with engine.begin() as conn:
@@ -295,6 +301,16 @@ def salvar_comuns(df_editado):
                 pag = str(row.get('pagador', 'Dividido (50/50)'))
                 query = "INSERT INTO gastos_comuns (item, valor, pagador) VALUES (:item, :val, :pag)"
                 conn.execute(text(query), {"item": str(row['item']), "val": float(row['valor']), "pag": pag})
+
+def salvar_status_fatura(pessoa, mes_ano, fechada):
+    with engine.begin() as conn:
+        query = '''
+            INSERT INTO status_faturas (pessoa, mes_ano, fechada)
+            VALUES (:pessoa, :mes_ano, :fechada)
+            ON CONFLICT (pessoa, mes_ano)
+            DO UPDATE SET fechada = EXCLUDED.fechada;
+        '''
+        conn.execute(text(query), {"pessoa": pessoa, "mes_ano": mes_ano, "fechada": fechada})
 
 def inserir_gasto_rapido(mes_ano, pessoa, descricao, categoria, valor):
     with engine.begin() as conn:
@@ -337,10 +353,11 @@ def salvar_programado_cartao(pessoa, df_editado):
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": str(row['cartao']), "desc": str(row['descricao']), "val": float(row['valor'])})
 
-# 9. LÓGICA DE CÁLCULO DE CAIXA INDIVIDUAL E CONSOLIDADA
+# 9. LÓGICA DE CÁLCULO FINANCEIRO
 def calcular_sequencia_financeira():
     rec_all_db = carregar_todas_projecoes("RECEITA")
     cart_all_db = carregar_todas_projecoes("CARTAO")
+    status_fat_db = carregar_status_faturas()
     
     prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].sum()
     prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].sum()
@@ -371,18 +388,25 @@ def calcular_sequencia_financeira():
         c_p1 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 1')]['valor'].sum() if not cart_all_db.empty else 0.0
         c_p2 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 2')]['valor'].sum() if not cart_all_db.empty else 0.0
         
+        # Verifica se fatura já fechou (Solução 2: Ignora provisões se estiver fechada)
+        f1_fechada = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 1') & (status_fat_db['mes_ano'] == m)]['fechada'].iloc[0] if not status_fat_db.empty and not status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 1') & (status_fat_db['mes_ano'] == m)].empty else False
+        f2_fechada = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 2') & (status_fat_db['mes_ano'] == m)]['fechada'].iloc[0] if not status_fat_db.empty and not status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 2') & (status_fat_db['mes_ano'] == m)].empty else False
+
+        add_prog_p1 = 0.0 if f1_fechada else prog_cart_p1
+        add_prog_p2 = 0.0 if f2_fechada else prog_cart_p2
+
         p_df = todos_pontuais_df[todos_pontuais_df['mes_ano'] == m] if not todos_pontuais_df.empty else pd.DataFrame()
         pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].sum() if not p_df.empty else 0.0
         pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].sum() if not p_df.empty else 0.0
         pont_comum = p_df[p_df['pessoa'] == 'Comum / Casa']['valor'].sum() if not p_df.empty else 0.0
         pontual_mes = pont_p1 + pont_p2 + pont_comum
 
-        gasto_exclusivo_p1 = (c_p1 + prog_cart_p1) + fix_p1 + pont_p1 + comuns_p1 + (comuns_div / 2)
-        gasto_exclusivo_p2 = (c_p2 + prog_cart_p2) + fix_p2 + pont_p2 + comuns_p2 + (comuns_div / 2)
+        gasto_exclusivo_p1 = (c_p1 + add_prog_p1) + fix_p1 + pont_p1 + comuns_p1 + (comuns_div / 2)
+        gasto_exclusivo_p2 = (c_p2 + add_prog_p2) + fix_p2 + pont_p2 + comuns_p2 + (comuns_div / 2)
 
         caixinha_mes = caixinha_df[caixinha_df['mes_ano'] == m]['valor'].sum() if not caixinha_df.empty else 0.0
 
-        saidas_mes = (c_p1 + c_p2 + prog_cart_p1 + prog_cart_p2) + tot_fixos + pontual_mes + caixinha_mes
+        saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
@@ -406,7 +430,7 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO COM BOTÃO DE SALVAMENTO E NAVEGAÇÃO
+# 10. CABEÇALHO E CONTROLES
 col_head, col_save_btn, col_logout_btn = st.columns([7, 3, 1.5])
 with col_head:
     st.title("📊 Painel Financeiro Integrado")
@@ -453,7 +477,7 @@ st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros[mes_atual]
 
-# BLUCO EXPANSÍVEL DE GASTO RÁPIDO (ESTÁVEL EM PC E CELULAR)
+# EXPANDER DE GASTO RÁPIDO
 with st.expander("➕ **Registrar Novo Gasto Rápido (PIX / Dinheiro)**", expanded=False):
     with st.form("form_gasto_rapido_exp", clear_on_submit=True):
         c_f1, c_f2 = st.columns(2)
@@ -529,7 +553,7 @@ st.markdown(f"""
 
 st.divider()
 
-# 11. Interface Principal (Abas Unificadas)
+# 11. Interface Principal
 tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
     "👤 Pessoa 1 (Lucas)", 
     "👤 Pessoa 2 (Marcella)", 
@@ -550,14 +574,25 @@ def renderizar_pessoa(pessoa, p_code):
     
     df_rec_grid = pd.DataFrame(rows_rec)
     df_rec_edit = st.data_editor(
-        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}",
+        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=120,
         column_config={mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
     )
     st.session_state[f"rec_{p_code}_df"] = df_rec_edit
 
     st.divider()
 
-    st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito (Fechadas/Processadas)")
+    st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
+    
+    # Checkbox de Fatura Fechada para o Mês Atual
+    status_df = carregar_status_faturas()
+    is_closed = status_df[(status_df['pessoa'] == pessoa) & (status_df['mes_ano'] == mes_atual)]['fechada'].iloc[0] if not status_df.empty and not status_df[(status_df['pessoa'] == pessoa) & (status_df['mes_ano'] == mes_atual)].empty else False
+    
+    chk_fechada = st.checkbox(f"✅ Fatura de {mes_atual} Fechada / Processada (Desliga Provisões de {pessoa})", value=bool(is_closed), key=f"chk_fat_{p_code}")
+    if chk_fechada != is_closed:
+        salvar_status_fatura(pessoa, mes_atual, chk_fechada)
+        st.cache_data.clear()
+        st.rerun()
+
     df_cart_db = carregar_projecao(pessoa, "CARTAO")
     rows_cart = []
     for item in ESTRUTURA_CARTÕES[pessoa]:
@@ -569,7 +604,7 @@ def renderizar_pessoa(pessoa, p_code):
         
     df_cart_grid = pd.DataFrame(rows_cart)
     df_cart_edit = st.data_editor(
-        df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}",
+        df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=170,
         column_config={mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
     )
     st.session_state[f"cart_{p_code}_df"] = df_cart_edit
@@ -579,7 +614,7 @@ def renderizar_pessoa(pessoa, p_code):
     st.subheader("🔮 3. Lançamentos Programados no Cartão (Seguros / Assinaturas Futuras)")
     df_prog_cart = carregar_programado_cartao(pessoa)
     df_prog_edit = st.data_editor(
-        df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}",
+        df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}", height=150,
         column_config={
             "cartao": st.column_config.SelectboxColumn("Cartão", options=ESTRUTURA_CARTÕES[pessoa]),
             "descricao": st.column_config.TextColumn("Descrição (ex: Seguro, Netflix)"),
@@ -593,7 +628,7 @@ def renderizar_pessoa(pessoa, p_code):
     st.subheader("📌 4. Gastos Fixos Individuais Recorrentes")
     df_fixos_db = carregar_fixos(pessoa)
     df_fixos_edit = st.data_editor(
-        df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}",
+        df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}", height=150,
         column_config={
             "item": st.column_config.TextColumn("Descrição do Gasto Fixo Individual"),
             "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0)
@@ -629,7 +664,7 @@ with tab_comuns:
     st.header("🏡 Despesas Comuns do Casal / Casa")
     df_comuns_db = carregar_comuns()
     df_comuns_edit = st.data_editor(
-        df_comuns_db, num_rows="dynamic", use_container_width=True, key="comuns_editor",
+        df_comuns_db, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
         column_config={
             "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
             "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0),
@@ -652,7 +687,7 @@ with tab_consolidado:
         
     df_caixinha_grid = pd.DataFrame(rows_caixinha)
     df_caixinha_edit = st.data_editor(
-        df_caixinha_grid, num_rows="fixed", use_container_width=True, key="caixinha_editor",
+        df_caixinha_grid, num_rows="fixed", use_container_width=True, key="caixinha_editor", height=200,
         column_config={
             "Mês": st.column_config.TextColumn("Mês", disabled=True),
             "Aporte do Mês (R$)": st.column_config.NumberColumn("Aporte do Mês (R$)", format="R$ %.2f", min_value=0.0)
@@ -685,4 +720,4 @@ with tab_consolidado:
     ])
     
     cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
-    st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf)
+    st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=220)
