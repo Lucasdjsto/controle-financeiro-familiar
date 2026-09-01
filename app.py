@@ -531,7 +531,10 @@ with tab_consolidado:
     total_comuns_fixos = df_comuns_edit['valor'].sum() if not df_comuns_edit.empty else 0.0
     df_todos_pontuais = carregar_todos_pontuais()
 
-    def extrair_totais_completos():
+def extrair_totais_completos():
+        prog_p1_sum = carregar_programado_cartao("Pessoa 1")['valor'].sum()
+        prog_p2_sum = carregar_programado_cartao("Pessoa 2")['valor'].sum()
+        
         totais = {mes: {"rec_p1": 0, "cart_p1": 0, "fixos_p1": fixos_p1['valor'].sum(),
                         "rec_p2": 0, "cart_p2": 0, "fixos_p2": fixos_p2['valor'].sum(),
                         "comuns_fixos": total_comuns_fixos,
@@ -541,9 +544,9 @@ with tab_consolidado:
         
         for mes in MESES_PROJECAO:
             totais[mes]["rec_p1"] = rec_p1[mes].sum()
-            totais[mes]["cart_p1"] = cart_p1[mes].sum() + prog_cart_p1_df['valor'].sum()
+            totais[mes]["cart_p1"] = cart_p1[mes].sum() + prog_p1_sum
             totais[mes]["rec_p2"] = rec_p2[mes].sum()
-            totais[mes]["cart_p2"] = cart_p2[mes].sum() + prog_cart_p2_df['valor'].sum()
+            totais[mes]["cart_p2"] = cart_p2[mes].sum() + prog_p2_sum
             
             if not df_todos_pontuais.empty:
                 df_p = df_todos_pontuais[df_todos_pontuais['mes_ano'] == mes]
