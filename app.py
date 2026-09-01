@@ -290,48 +290,50 @@ with col_logout:
         st.session_state["autenticado"] = False
         st.rerun()
 
-# --- 10. CARD DE LIQUIDEZ INSTANTÂNEA (PRIMEIRA TELA) ---
-mes_atual = MESES_PROJECAO[0]
+# --- 10. CARD DE LIQUIDEZ INSTANTÂNEA (PRIMEIRA TELA - CORRIGIDO) ---
+mes_atual = MESES_PROJECAO[0]  # "08.2026"
 
-# Carregamento rápido de dados do mês vigente
-rec_p1_df = carregar_projecao("Pessoa 1", "RECEITA")
-cart_p1_df = carregar_projecao("Pessoa 1", "CARTAO")
-fix_p1_df = carregar_fixos("Pessoa 1")
-prov_din_p1_df = carregar_dinheiro_provisionado("Pessoa 1")
-prog_cart_p1_df = carregar_programado_cartao("Pessoa 1")
+# 1. Carregamento e soma exata de Receitas do Mês Atual (Pessoa 1 + Pessoa 2)
+rec_p1_db = carregar_projecao("Pessoa 1", "RECEITA")
+rec_p2_db = carregar_projecao("Pessoa 2", "RECEITA")
 
-rec_p2_df = carregar_projecao("Pessoa 2", "RECEITA")
-cart_p2_df = carregar_projecao("Pessoa 2", "CARTAO")
-fix_p2_df = carregar_fixos("Pessoa 2")
-prov_din_p2_df = carregar_dinheiro_provisionado("Pessoa 2")
-prog_cart_p2_df = carregar_programado_cartao("Pessoa 2")
+tot_rec_p1 = rec_p1_db[rec_p1_db['mes_ano'] == mes_atual]['valor'].sum() if not rec_p1_db.empty else 0.0
+tot_rec_p2 = rec_p2_db[rec_p2_db['mes_ano'] == mes_atual]['valor'].sum() if not rec_p2_db.empty else 0.0
+tot_rec = tot_rec_p1 + tot_rec_p2
 
-comuns_df = carregar_comuns()
+# 2. Carregamento e soma exata do Cartão de Crédito do Mês Atual
+cart_p1_db = carregar_projecao("Pessoa 1", "CARTAO")
+cart_p2_db = carregar_projecao("Pessoa 2", "CARTAO")
+
+tot_cart_p1 = cart_p1_db[cart_p1_db['mes_ano'] == mes_atual]['valor'].sum() if not cart_p1_db.empty else 0.0
+tot_cart_p2 = cart_p2_db[cart_p2_db['mes_ano'] == mes_atual]['valor'].sum() if not cart_p2_db.empty else 0.0
+
+prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].sum()
+prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].sum()
+
+tot_cart = tot_cart_p1 + tot_cart_p2 + prog_cart_p1 + prog_cart_p2
+
+# 3. Demais Despesas
+tot_prov_din = carregar_dinheiro_provisionado("Pessoa 1")['valor'].sum() + carregar_dinheiro_provisionado("Pessoa 2")['valor'].sum()
+tot_fixos = carregar_fixos("Pessoa 1")['valor'].sum() + carregar_fixos("Pessoa 2")['valor'].sum() + carregar_comuns()['valor'].sum()
+
 pontuais_df = carregar_pontuais(mes_atual)
+tot_pontuais = pontuais_df['valor'].sum() if not pontuais_df.empty else 0.0
+
 caixinha_df = carregar_caixinha()
+cax_val = caixinha_df[caixinha_df['mes_ano'] == mes_atual]['valor'].sum() if not caixinha_df.empty else 0.0
 
-# Totais calculados do mês
-tot_rec = (rec_p1_df[mes_atual].sum() if mes_atual in rec_p1_df.columns else 0) + \
-          (rec_p2_df[mes_atual].sum() if mes_atual in rec_p2_df.columns else 0)
-
-tot_prov_din = prov_din_p1_df['valor'].sum() + prov_din_p2_df['valor'].sum()
-tot_cart = (cart_p1_df[mes_atual].sum() if mes_atual in cart_p1_df.columns else 0) + \
-           (cart_p2_df[mes_atual].sum() if mes_atual in cart_p2_df.columns else 0) + \
-           prog_cart_p1_df['valor'].sum() + prog_cart_p2_df['valor'].sum()
-
-tot_fixos = fix_p1_df['valor'].sum() + fix_p2_df['valor'].sum() + comuns_df['valor'].sum()
-tot_pontuais = pontuais_df['valor'].sum() if not pontuais_df.empty else 0
-cax_val = caixinha_df[caixinha_df['mes_ano'] == mes_atual]['valor'].sum() if not caixinha_df.empty else 0
-
+# 4. Cálculo da Liquidez Real
 tot_despesas = tot_cart + tot_fixos + tot_pontuais + tot_prov_din + cax_val
 sobra_liquida = tot_rec - tot_despesas
 
-# Renderização do Painel de Liquidez
+# Renderização do Card Superior
 st.markdown(f"### ⚡ Situação Atual do Mês ({mes_atual})")
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Renda Bruta", f"R$ {tot_rec:,.2f}")
 k2.metric("Saídas Totais (Cartão/Fixos/PIX)", f"R$ {tot_despesas:,.2f}")
 k3.metric("Aporte Caixinha", f"R$ {cax_val:,.2f}")
+
 if sobra_liquida >= 0:
     k4.metric("Sobra do Mês", f"R$ {sobra_liquida:,.2f}", delta="Positivo", delta_color="normal")
 else:
