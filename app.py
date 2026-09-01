@@ -146,7 +146,9 @@ init_db()
 # 6. Constantes e Estruturas
 MESES_PROJECAO = [
     "08.2026", "09.2026", "10.2026", "11.2026", "12.2026",
-    "01.2027", "02.2027", "03.2027", "04.2027", "05.2027"
+    "01.2027", "02.2027", "03.2027", "04.2027", "05.2027", "06.2027", "07.2027",
+    "08.2027", "09.2027", "10.2027", "11.2027", "12.2027",
+    "01.2028", "02.2028", "03.2028", "04.2028", "05.2028", "06.2028", "07.2028"
 ]
 
 ESTRUTURA_CARTÕES = {
@@ -164,6 +166,11 @@ ESTRUTURA_RECEITAS = {
 def carregar_projecao(pessoa, tipo):
     query = "SELECT * FROM projecao WHERE pessoa = :pessoa AND tipo = :tipo"
     return pd.read_sql(text(query), engine, params={"pessoa": pessoa, "tipo": tipo})
+
+@st.cache_data(ttl=600)
+def carregar_todas_projecoes(tipo):
+    query = "SELECT * FROM projecao WHERE tipo = :tipo"
+    return pd.read_sql(text(query), engine, params={"tipo": tipo})
 
 @st.cache_data(ttl=600)
 def carregar_fixos(pessoa):
@@ -200,12 +207,12 @@ def carregar_dinheiro_provisionado(pessoa):
     query = "SELECT id, descricao, valor FROM dinheiro_provisionado WHERE pessoa = :pessoa"
     return pd.read_sql(text(query), engine, params={"pessoa": pessoa})
 
-# 8. Funções de Escrita com Invalidação de Cache
-def salvar_projecao(pessoa, tipo, df_editado):
+# 8. Funções de Escrita
+def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
             item = row['Item']
-            for mes in MESES_PROJECAO:
+            for mes in meses_visiveis:
                 val = float(row[mes]) if pd.notnull(row[mes]) else 0.0
                 query = '''
                     INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
@@ -214,7 +221,6 @@ def salvar_projecao(pessoa, tipo, df_editado):
                     DO UPDATE SET valor = EXCLUDED.valor;
                 '''
                 conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes, "val": val})
-    st.cache_data.clear()
 
 def salvar_fixos(pessoa, df_editado):
     with engine.begin() as conn:
@@ -223,7 +229,6 @@ def salvar_fixos(pessoa, df_editado):
             if str(row['item']).strip():
                 query = "INSERT INTO gastos_fixos (pessoa, item, valor) VALUES (:pessoa, :item, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "val": float(row['valor'])})
-    st.cache_data.clear()
 
 def salvar_comuns(df_editado):
     with engine.begin() as conn:
@@ -232,7 +237,6 @@ def salvar_comuns(df_editado):
             if str(row['item']).strip():
                 query = "INSERT INTO gastos_comuns (item, valor) VALUES (:item, :val)"
                 conn.execute(text(query), {"item": str(row['item']), "val": float(row['valor'])})
-    st.cache_data.clear()
 
 def salvar_pontuais(mes_ano, df_editado):
     with engine.begin() as conn:
@@ -247,7 +251,6 @@ def salvar_pontuais(mes_ano, df_editado):
                     "cat": str(row['categoria']), 
                     "val": float(row['valor'])
                 })
-    st.cache_data.clear()
 
 def salvar_caixinha(df_editado):
     with engine.begin() as conn:
@@ -261,7 +264,6 @@ def salvar_caixinha(df_editado):
                 DO UPDATE SET valor = EXCLUDED.valor;
             '''
             conn.execute(text(query), {"mes": mes, "val": val})
-    st.cache_data.clear()
 
 def salvar_programado_cartao(pessoa, df_editado):
     with engine.begin() as conn:
@@ -270,7 +272,6 @@ def salvar_programado_cartao(pessoa, df_editado):
             if str(row['descricao']).strip():
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": str(row['cartao']), "desc": str(row['descricao']), "val": float(row['valor'])})
-    st.cache_data.clear()
 
 def salvar_dinheiro_provisionado(pessoa, df_editado):
     with engine.begin() as conn:
@@ -279,12 +280,33 @@ def salvar_dinheiro_provisionado(pessoa, df_editado):
             if str(row['descricao']).strip():
                 query = "INSERT INTO dinheiro_provisionado (pessoa, descricao, valor) VALUES (:pessoa, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "desc": str(row['descricao']), "val": float(row['valor'])})
-    st.cache_data.clear()
 
-# 9. Cabeçalho e Logout
-col_head, col_logout = st.columns([8, 2])
+# 9. Cabeçalho e Botão Unificado de Salvamento
+col_head, col_save_all, col_logout = st.columns([6, 3, 1])
 with col_head:
     st.title("📊 Painel Financeiro Integrado")
+
+with col_save_all:
+    if st.button("💾 SALVAR TODAS AS ALTERAÇÕES", type="primary", use_container_width=True):
+        if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
+        if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
+        if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"])
+        if "prog_p1_df" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1_df"])
+        if "prov_p1_df" in st.session_state: salvar_dinheiro_provisionado("Pessoa 1", st.session_state["prov_p1_df"])
+
+        if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"])
+        if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"])
+        if "fix_p2_df" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2_df"])
+        if "prog_p2_df" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2_df"])
+        if "prov_p2_df" in st.session_state: salvar_dinheiro_provisionado("Pessoa 2", st.session_state["prov_p2_df"])
+
+        if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"])
+        if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"])
+        
+        st.cache_data.clear()
+        st.success("Tudo foi salvo com sucesso!")
+        st.rerun()
+
 with col_logout:
     if st.button("🚪 Sair"):
         st.session_state["autenticado"] = False
@@ -292,10 +314,8 @@ with col_logout:
 
 # 10. LÓGICA DE CÁLCULO DE CAIXA E ACÚMULO SEQUENCIAL
 def calcular_sequencia_financeira():
-    rec_p1_db = carregar_projecao("Pessoa 1", "RECEITA")
-    rec_p2_db = carregar_projecao("Pessoa 2", "RECEITA")
-    cart_p1_db = carregar_projecao("Pessoa 1", "CARTAO")
-    cart_p2_db = carregar_projecao("Pessoa 2", "CARTAO")
+    rec_all_db = carregar_todas_projecoes("RECEITA")
+    cart_all_db = carregar_todas_projecoes("CARTAO")
     
     prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].sum()
     prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].sum()
@@ -310,13 +330,10 @@ def calcular_sequencia_financeira():
     saldo_acumulado_anterior = 0.0
 
     for m in MESES_PROJECAO:
-        r1 = rec_p1_db[rec_p1_db['mes_ano'] == m]['valor'].sum() if not rec_p1_db.empty else 0.0
-        r2 = rec_p2_db[rec_p2_db['mes_ano'] == m]['valor'].sum() if not rec_p2_db.empty else 0.0
-        renda_mes = r1 + r2
+        renda_mes = rec_all_db[rec_all_db['mes_ano'] == m]['valor'].sum() if not rec_all_db.empty else 0.0
         
-        c1 = cart_p1_db[cart_p1_db['mes_ano'] == m]['valor'].sum() if not cart_p1_db.empty else 0.0
-        c2 = cart_p2_db[cart_p2_db['mes_ano'] == m]['valor'].sum() if not cart_p2_db.empty else 0.0
-        cartao_mes = c1 + c2 + prog_cart_p1 + prog_cart_p2
+        c_val = cart_all_db[cart_all_db['mes_ano'] == m]['valor'].sum() if not cart_all_db.empty else 0.0
+        cartao_mes = c_val + prog_cart_p1 + prog_cart_p2
         
         p_df = todos_pontuais_df[todos_pontuais_df['mes_ano'] == m] if not todos_pontuais_df.empty else pd.DataFrame()
         pontual_mes = p_df['valor'].sum() if not p_df.empty else 0.0
@@ -331,7 +348,6 @@ def calcular_sequencia_financeira():
         dados_meses[m] = {
             "saldo_anterior": saldo_acumulado_anterior,
             "renda_mes": renda_mes,
-            "disponivel_total": saldo_acumulado_anterior + renda_mes,
             "saidas_mes": saidas_mes,
             "caixinha_mes": caixinha_mes,
             "sobra_mes_isolada": sobra_do_mes_bruta,
@@ -344,12 +360,18 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# --- CARD DE LIQUIDEZ INSTANTÂNEA (COM SELETOR DE MÊS) ---
-col_tit, col_sel = st.columns([7, 3])
+# --- ARQUIVAMENTO E SELEÇÃO DO MÊS DE FOCO ---
+col_tit, col_sel, col_visao = st.columns([5, 3, 2])
 with col_tit:
     st.markdown("### ⚡ Situação Atual do Mês")
 with col_sel:
-    mes_atual = st.selectbox("Selecione o Mês para Análise:", MESES_PROJECAO, index=0)
+    mes_atual = st.selectbox("Selecione o Mês em Destaque:", MESES_PROJECAO, index=0)
+with col_visao:
+    modo_exibicao = st.radio("Janela Temporal:", ["Próximos 12 meses", "Todos os 24 meses"], index=0)
+
+idx_foco = MESES_PROJECAO.index(mes_atual)
+meses_visiveis = MESES_PROJECAO[idx_foco:idx_foco+12] if modo_exibicao == "Próximos 12 meses" else MESES_PROJECAO[idx_foco:]
+st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros[mes_atual]
 
@@ -376,26 +398,23 @@ tab_p1, tab_p2, tab_comuns, tab_pontuais, tab_consolidado = st.tabs([
     "🏠 Visão Consolidada & Caixinha"
 ])
 
-def renderizar_pessoa(pessoa):
+def renderizar_pessoa(pessoa, p_code):
     st.subheader("💵 1. Receitas (Salário e Rendimentos)")
     df_rec_db = carregar_projecao(pessoa, "RECEITA")
     rows_rec = []
     for item in ESTRUTURA_RECEITAS[pessoa]:
         row_dict = {"Item": item}
-        for mes in MESES_PROJECAO:
+        for mes in meses_visiveis:
             val = df_rec_db[(df_rec_db['item'] == item) & (df_rec_db['mes_ano'] == mes)]['valor']
             row_dict[mes] = float(val.iloc[0]) if not val.empty else 0.0
         rows_rec.append(row_dict)
     
     df_rec_grid = pd.DataFrame(rows_rec)
     df_rec_edit = st.data_editor(
-        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{pessoa}",
-        column_config={mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in MESES_PROJECAO}
+        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}",
+        column_config={mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
     )
-    if st.button(f"💾 Salvar Receitas - {pessoa}"):
-        salvar_projecao(pessoa, "RECEITA", df_rec_edit)
-        st.success("Receitas salvas com sucesso!")
-        st.rerun()
+    st.session_state[f"rec_{p_code}_df"] = df_rec_edit
 
     st.divider()
 
@@ -404,84 +423,66 @@ def renderizar_pessoa(pessoa):
     rows_cart = []
     for item in ESTRUTURA_CARTÕES[pessoa]:
         row_dict = {"Item": item}
-        for mes in MESES_PROJECAO:
+        for mes in meses_visiveis:
             val = df_cart_db[(df_cart_db['item'] == item) & (df_cart_db['mes_ano'] == mes)]['valor']
             row_dict[mes] = float(val.iloc[0]) if not val.empty else 0.0
         rows_cart.append(row_dict)
         
     df_cart_grid = pd.DataFrame(rows_cart)
     df_cart_edit = st.data_editor(
-        df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{pessoa}",
-        column_config={mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in MESES_PROJECAO}
+        df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}",
+        column_config={mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
     )
-    if st.button(f"💾 Salvar Cartões - {pessoa}"):
-        salvar_projecao(pessoa, "CARTAO", df_cart_edit)
-        st.success("Cartões salvos com sucesso!")
-        st.rerun()
+    st.session_state[f"cart_{p_code}_df"] = df_cart_edit
 
     st.divider()
 
     st.subheader("🔮 3. Lançamentos Programados no Cartão (Seguros / Assinaturas Futuras)")
-    st.caption("Cadastre gastos certos que ainda não entraram na fatura para prever o valor real do cartão.")
     df_prog_cart = carregar_programado_cartao(pessoa)
     df_prog_edit = st.data_editor(
-        df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_cart_{pessoa}",
+        df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}",
         column_config={
             "cartao": st.column_config.SelectboxColumn("Cartão", options=ESTRUTURA_CARTÕES[pessoa]),
             "descricao": st.column_config.TextColumn("Descrição (ex: Seguro, Netflix)"),
             "valor": st.column_config.NumberColumn("Valor Previsto (R$)", format="R$ %.2f", min_value=0.0)
         }
     )
-    if st.button(f"💾 Salvar Lançamentos Programados - {pessoa}"):
-        salvar_programado_cartao(pessoa, df_prog_edit)
-        st.success("Lançamentos programados salvos com sucesso!")
-        st.rerun()
+    st.session_state[f"prog_{p_code}_df"] = df_prog_edit
 
     st.divider()
 
     st.subheader("📌 4. Gastos Fixos Individuais Recorrentes")
     df_fixos_db = carregar_fixos(pessoa)
     df_fixos_edit = st.data_editor(
-        df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fixos_{pessoa}",
+        df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}",
         column_config={
             "item": st.column_config.TextColumn("Descrição do Gasto Fixo Individual"),
             "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0)
         }
     )
-    if st.button(f"💾 Salvar Gastos Fixos - {pessoa}"):
-        salvar_fixos(pessoa, df_fixos_edit)
-        st.success("Gastos fixos salvos com sucesso!")
-        st.rerun()
+    st.session_state[f"fix_{p_code}_df"] = df_fixos_edit
 
     st.divider()
 
     st.subheader("💵 5. PIX / Dinheiro Certo (Desconto Automático da Renda)")
-    st.caption("Gastos fixos em dinheiro que são liquidados logo no recebimento do salário.")
     df_prov_din = carregar_dinheiro_provisionado(pessoa)
     df_prov_edit = st.data_editor(
-        df_prov_din, num_rows="dynamic", use_container_width=True, key=f"prov_din_{pessoa}",
+        df_prov_din, num_rows="dynamic", use_container_width=True, key=f"prov_{p_code}",
         column_config={
             "descricao": st.column_config.TextColumn("Descrição (ex: Barbeiro, Feira)"),
             "valor": st.column_config.NumberColumn("Valor Previsto (R$)", format="R$ %.2f", min_value=0.0)
         }
     )
-    if st.button(f"💾 Salvar PIX Certo - {pessoa}"):
-        salvar_dinheiro_provisionado(pessoa, df_prov_edit)
-        st.success("Gastos em dinheiro salvos com sucesso!")
-        st.rerun()
-
-    return df_rec_edit, df_cart_edit, df_fixos_edit
+    st.session_state[f"prov_{p_code}_df"] = df_prov_edit
 
 with tab_p1:
-    rec_p1, cart_p1, fixos_p1 = renderizar_pessoa("Pessoa 1")
+    renderizar_pessoa("Pessoa 1", "p1")
 
 with tab_p2:
-    rec_p2, cart_p2, fixos_p2 = renderizar_pessoa("Pessoa 2")
+    renderizar_pessoa("Pessoa 2", "p2")
 
 with tab_comuns:
     st.header("🏡 Despesas Comuns do Casal / Casa")
-    st.info("Cadastre aqui as despesas que são compartilhadas (ex: Aluguel, Condomínio, Energia, Água, Internet, Mercado da Casa).")
-    
     df_comuns_db = carregar_comuns()
     df_comuns_edit = st.data_editor(
         df_comuns_db, num_rows="dynamic", use_container_width=True, key="comuns_editor",
@@ -490,16 +491,13 @@ with tab_comuns:
             "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0)
         }
     )
-    if st.button("💾 Salvar Despesas Comuns"):
-        salvar_comuns(df_comuns_edit)
-        st.success("Despesas comuns salvas com sucesso!")
-        st.rerun()
+    st.session_state["comuns_df"] = df_comuns_edit
 
 with tab_pontuais:
     st.header("💸 Gastos Pontuais em Dinheiro/PIX (Imprevistos do Mês)")
     col_sel_p, _ = st.columns([2, 3])
     with col_sel_p:
-        mes_pontual = st.selectbox("Selecione o Mês:", MESES_PROJECAO, index=0)
+        mes_pontual = st.selectbox("Selecione o Mês:", MESES_PROJECAO, index=idx_foco)
         
     df_pontuais_db = carregar_pontuais(mes_pontual)
     
@@ -512,9 +510,10 @@ with tab_pontuais:
             "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0)
         }
     )
-    if st.button("💾 Salvar Gastos Pontuais"):
+    if st.button("💾 Salvar Gastos Pontuais do Mês"):
         salvar_pontuais(mes_pontual, df_pontuais_edit)
-        st.success(f"Gastos pontuais de {mes_pontual} salvos com sucesso!")
+        st.cache_data.clear()
+        st.success(f"Gastos pontuais de {mes_pontual} salvos!")
         st.rerun()
 
 with tab_consolidado:
@@ -524,7 +523,7 @@ with tab_consolidado:
     df_caixinha_db = carregar_caixinha()
     rows_caixinha = []
     
-    for mes in MESES_PROJECAO:
+    for mes in meses_visiveis:
         val = df_caixinha_db[df_caixinha_db['mes_ano'] == mes]['valor']
         val_aporte = float(val.iloc[0]) if not val.empty else 0.0
         rows_caixinha.append({"Mês": mes, "Aporte do Mês (R$)": val_aporte})
@@ -537,10 +536,7 @@ with tab_consolidado:
             "Aporte do Mês (R$)": st.column_config.NumberColumn("Aporte do Mês (R$)", format="R$ %.2f", min_value=0.0)
         }
     )
-    if st.button("💾 Salvar Aportes da Caixinha"):
-        salvar_caixinha(df_caixinha_edit)
-        st.success("Aportes da caixinha salvos com sucesso!")
-        st.rerun()
+    st.session_state["caixinha_df"] = df_caixinha_edit
 
     st.divider()
 
@@ -553,7 +549,7 @@ with tab_consolidado:
     row_sobra_mes = {"Métrica": "5. Sobra Líquida Isolada do Mês"}
     row_sal_fim = {"Métrica": "6. Saldo Final Acumulado em Conta"}
 
-    for m in MESES_PROJECAO:
+    for m in meses_visiveis:
         d = dados_financeiros[m]
         row_sal_ini[m] = d["saldo_anterior"]
         row_rec[m] = d["renda_mes"]
@@ -566,5 +562,5 @@ with tab_consolidado:
         row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim
     ])
     
-    cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in MESES_PROJECAO}
+    cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
     st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf)
