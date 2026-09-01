@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Dinâmico (Flexbox Responsivo e Botões)
+# 2. Injeção de CSS Otimizado (Fluido para PC e Celular)
 st.markdown("""
     <style>
         .block-container {
@@ -119,7 +119,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão Otimizada com o Banco de Dados
+# 4. Conexão Antibloqueio e Otimizada com o Banco de Dados (Anti Stale/SSL Timeout)
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -132,9 +132,9 @@ def get_db_engine():
     return create_engine(
         db_url,
         pool_size=5,
-        max_overflow=10,
-        pool_recycle=300,
-        pool_pre_ping=True,
+        max_overflow=5,
+        pool_recycle=60, # Descarta conexões velhas presas a cada 60s
+        pool_pre_ping=True, # Testa se a conexão caiu antes de executar query
         connect_args={"connect_timeout": 10}
     )
 
@@ -142,58 +142,61 @@ engine = get_db_engine()
 
 # 5. Inicialização das Tabelas no Banco
 def init_db():
-    with engine.begin() as conn:
-        conn.execute(text('''
-            CREATE TABLE IF NOT EXISTS projecao (
-                pessoa TEXT,
-                tipo TEXT,
-                item TEXT,
-                mes_ano TEXT,
-                valor DOUBLE PRECISION DEFAULT 0,
-                PRIMARY KEY (pessoa, tipo, item, mes_ano)
-            );
-        '''))
-        conn.execute(text('''
-            CREATE TABLE IF NOT EXISTS gastos_fixos (
-                id SERIAL PRIMARY KEY,
-                pessoa TEXT,
-                item TEXT,
-                valor DOUBLE PRECISION DEFAULT 0
-            );
-        '''))
-        conn.execute(text('''
-            CREATE TABLE IF NOT EXISTS gastos_comuns (
-                id SERIAL PRIMARY KEY,
-                item TEXT,
-                valor DOUBLE PRECISION DEFAULT 0,
-                pagador TEXT DEFAULT 'Dividido (50/50)'
-            );
-        '''))
-        conn.execute(text('''
-            CREATE TABLE IF NOT EXISTS pontuais_dinheiro (
-                id SERIAL PRIMARY KEY,
-                mes_ano TEXT,
-                pessoa TEXT,
-                descricao TEXT,
-                categoria TEXT,
-                valor DOUBLE PRECISION DEFAULT 0
-            );
-        '''))
-        conn.execute(text('''
-            CREATE TABLE IF NOT EXISTS caixinha (
-                mes_ano TEXT PRIMARY KEY,
-                valor DOUBLE PRECISION DEFAULT 0
-            );
-        '''))
-        conn.execute(text('''
-            CREATE TABLE IF NOT EXISTS programado_cartao (
-                id SERIAL PRIMARY KEY,
-                pessoa TEXT,
-                cartao TEXT,
-                descricao TEXT,
-                valor DOUBLE PRECISION DEFAULT 0
-            );
-        '''))
+    try:
+        with engine.begin() as conn:
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS projecao (
+                    pessoa TEXT,
+                    tipo TEXT,
+                    item TEXT,
+                    mes_ano TEXT,
+                    valor DOUBLE PRECISION DEFAULT 0,
+                    PRIMARY KEY (pessoa, tipo, item, mes_ano)
+                );
+            '''))
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS gastos_fixos (
+                    id SERIAL PRIMARY KEY,
+                    pessoa TEXT,
+                    item TEXT,
+                    valor DOUBLE PRECISION DEFAULT 0
+                );
+            '''))
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS gastos_comuns (
+                    id SERIAL PRIMARY KEY,
+                    item TEXT,
+                    valor DOUBLE PRECISION DEFAULT 0,
+                    pagador TEXT DEFAULT 'Dividido (50/50)'
+                );
+            '''))
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS pontuais_dinheiro (
+                    id SERIAL PRIMARY KEY,
+                    mes_ano TEXT,
+                    pessoa TEXT,
+                    descricao TEXT,
+                    categoria TEXT,
+                    valor DOUBLE PRECISION DEFAULT 0
+                );
+            '''))
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS caixinha (
+                    mes_ano TEXT PRIMARY KEY,
+                    valor DOUBLE PRECISION DEFAULT 0
+                );
+            '''))
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS programado_cartao (
+                    id SERIAL PRIMARY KEY,
+                    pessoa TEXT,
+                    cartao TEXT,
+                    descricao TEXT,
+                    valor DOUBLE PRECISION DEFAULT 0
+                );
+            '''))
+    except Exception as e:
+        st.error(f"Erro de Conexão com o Banco de Dados: {e}")
 
 init_db()
 
@@ -223,22 +226,22 @@ ESTRUTURA_RECEITAS = {
 }
 
 # 7. Funções de Leitura com Cache Inteligente
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_projecao(pessoa, tipo):
     query = "SELECT * FROM projecao WHERE pessoa = :pessoa AND tipo = :tipo"
     return pd.read_sql(text(query), engine, params={"pessoa": pessoa, "tipo": tipo})
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_todas_projecoes(tipo):
     query = "SELECT * FROM projecao WHERE tipo = :tipo"
     return pd.read_sql(text(query), engine, params={"tipo": tipo})
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_fixos(pessoa):
     query = "SELECT id, item, valor FROM gastos_fixos WHERE pessoa = :pessoa"
     return pd.read_sql(text(query), engine, params={"pessoa": pessoa})
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_comuns():
     query = "SELECT id, item, valor, pagador FROM gastos_comuns"
     df = pd.read_sql(text(query), engine)
@@ -246,17 +249,17 @@ def carregar_comuns():
         df['pagador'] = 'Dividido (50/50)'
     return df
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_todos_pontuais():
     query = "SELECT id, mes_ano, pessoa, descricao, categoria, valor FROM pontuais_dinheiro"
     return pd.read_sql(text(query), engine)
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_caixinha():
     query = "SELECT mes_ano, valor FROM caixinha"
     return pd.read_sql(text(query), engine)
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_programado_cartao(pessoa):
     query = "SELECT id, cartao, descricao, valor FROM programado_cartao WHERE pessoa = :pessoa"
     return pd.read_sql(text(query), engine, params={"pessoa": pessoa})
@@ -334,32 +337,7 @@ def salvar_programado_cartao(pessoa, df_editado):
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": str(row['cartao']), "desc": str(row['descricao']), "val": float(row['valor'])})
 
-# 9. DIÁLOGO POP-UP (REGISTRO RÁPIDO DE GASTO EM DINHEIRO/PIX)
-@st.dialog("➕ Registrar Novo Gasto Rápido (PIX / Dinheiro)")
-def modal_gasto_rapido(mes_default):
-    with st.form("form_gasto_rapido", clear_on_submit=True):
-        desc = st.text_input("Descrição (ex: Barbeiro, Feira, Farmácia)", placeholder="Digite a descrição...")
-        val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
-        
-        col_p, col_c = st.columns(2)
-        with col_p:
-            pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
-        with col_c:
-            cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
-            
-        mes_target = st.selectbox("Mês de Referência", TODOS_MESES_SISTEMA[:24], index=TODOS_MESES_SISTEMA.index(mes_default))
-        
-        btn_salvar = st.form_submit_button("💾 Salvar Gasto", type="primary", use_container_width=True)
-        
-        if btn_salvar:
-            if not desc.strip():
-                st.error("Por favor, preencha a descrição do gasto.")
-            else:
-                inserir_gasto_rapido(mes_target, pessoa, desc, cat, val)
-                st.success("Gasto registrado com sucesso!")
-                st.rerun()
-
-# 10. LÓGICA DE CÁLCULO DE CAIXA INDIVIDUAL E CONSOLIDADA
+# 9. LÓGICA DE CÁLCULO DE CAIXA INDIVIDUAL E CONSOLIDADA
 def calcular_sequencia_financeira():
     rec_all_db = carregar_todas_projecoes("RECEITA")
     cart_all_db = carregar_todas_projecoes("CARTAO")
@@ -428,15 +406,10 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 11. CABEÇALHO COM BOTÃO DE SALVAMENTO E GASTO RÁPIDO
-col_head, col_quick, col_save_btn, col_logout_btn = st.columns([5, 2.5, 2.5, 1.2])
+# 10. CABEÇALHO COM BOTÃO DE SALVAMENTO E NAVEGAÇÃO
+col_head, col_save_btn, col_logout_btn = st.columns([7, 3, 1.5])
 with col_head:
     st.title("📊 Painel Financeiro Integrado")
-
-with col_quick:
-    st.write("")
-    if st.button("➕ Gasto Rápido (PIX)", type="secondary", use_container_width=True):
-        modal_gasto_rapido(st.session_state.get("mes_atual_sel", "08.2026"))
 
 with col_save_btn:
     st.write("")
@@ -479,6 +452,28 @@ meses_visiveis = TODOS_MESES_SISTEMA[idx_foco:idx_foco + qtd_meses]
 st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros[mes_atual]
+
+# BLUCO EXPANSÍVEL DE GASTO RÁPIDO (ESTÁVEL EM PC E CELULAR)
+with st.expander("➕ **Registrar Novo Gasto Rápido (PIX / Dinheiro)**", expanded=False):
+    with st.form("form_gasto_rapido_exp", clear_on_submit=True):
+        c_f1, c_f2 = st.columns(2)
+        with c_f1:
+            desc = st.text_input("Descrição (ex: Barbeiro, Feira, Farmácia)", placeholder="Digite a descrição...")
+            val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
+        with c_f2:
+            pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
+            cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
+            
+        mes_target = st.selectbox("Mês de Referência", TODOS_MESES_SISTEMA[:24], index=TODOS_MESES_SISTEMA.index(mes_atual))
+        btn_salvar_gasto = st.form_submit_button("💾 Salvar Gasto", type="primary", use_container_width=True)
+        
+        if btn_salvar_gasto:
+            if not desc.strip():
+                st.error("Por favor, preencha a descrição do gasto.")
+            else:
+                inserir_gasto_rapido(mes_target, pessoa, desc, cat, val)
+                st.success("Gasto registrado com sucesso!")
+                st.rerun()
 
 # PAINEL RESUMO MENSAL
 st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
@@ -534,7 +529,7 @@ st.markdown(f"""
 
 st.divider()
 
-# 12. Interface Principal (Abas Unificadas)
+# 11. Interface Principal (Abas Unificadas)
 tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
     "👤 Pessoa 1 (Lucas)", 
     "👤 Pessoa 2 (Marcella)", 
