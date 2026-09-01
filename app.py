@@ -120,7 +120,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão Anti-Bloqueio
+# 4. Conexão Otimizada com Pooler do Supabase
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -132,9 +132,9 @@ def get_db_engine():
     
     return create_engine(
         db_url,
-        pool_size=5,
-        max_overflow=5,
-        pool_recycle=60,
+        pool_size=3,
+        max_overflow=2,
+        pool_recycle=300,
         pool_pre_ping=True,
         connect_args={"connect_timeout": 10}
     )
@@ -234,51 +234,43 @@ ESTRUTURA_RECEITAS = {
     "Pessoa 2": ["Salário Base", "Receita Extra"]
 }
 
-# 7. Funções de Leitura com Cache Inteligente
+# 7. Funções de Leitura Otimizadas em Lote (Cache de 5 minutos)
 @st.cache_data(ttl=300)
-def carregar_projecao(pessoa, tipo):
-    query = "SELECT * FROM projecao WHERE pessoa = :pessoa AND tipo = :tipo"
-    return pd.read_sql(text(query), engine, params={"pessoa": pessoa, "tipo": tipo})
+def carregar_dados_globais():
+    with engine.connect() as conn:
+        df_proj = pd.read_sql(text("SELECT * FROM projecao"), conn)
+        df_fixos = pd.read_sql(text("SELECT * FROM gastos_fixos"), conn)
+        df_comuns = pd.read_sql(text("SELECT * FROM gastos_comuns"), conn)
+        df_pontuais = pd.read_sql(text("SELECT * FROM pontuais_dinheiro"), conn)
+        df_caixinha = pd.read_sql(text("SELECT * FROM caixinha"), conn)
+        df_prog = pd.read_sql(text("SELECT * FROM programado_cartao"), conn)
+        df_status = pd.read_sql(text("SELECT * FROM status_faturas"), conn)
+    
+    if 'pagador' not in df_comuns.columns:
+        df_comuns['pagador'] = 'Dividido (50/50)'
+        
+    return df_proj, df_fixos, df_comuns, df_pontuais, df_caixinha, df_prog, df_status
 
-@st.cache_data(ttl=300)
-def carregar_todas_projecoes(tipo):
-    query = "SELECT * FROM projecao WHERE tipo = :tipo"
-    return pd.read_sql(text(query), engine, params={"tipo": tipo})
+# Carrega todos os dados de uma só vez para máxima performance
+df_proj_all, df_fixos_all, df_comuns_all, df_pontuais_all, df_caixinha_all, df_prog_all, df_status_all = carregar_dados_globais()
 
-@st.cache_data(ttl=300)
-def carregar_fixos(pessoa):
-    query = "SELECT id, item, valor FROM gastos_fixos WHERE pessoa = :pessoa"
-    return pd.read_sql(text(query), engine, params={"pessoa": pessoa})
+# Helpers específicos baseados nos DataFrames globais em cache
+def get_projecao(pessoa, tipo):
+    if df_proj_all.empty:
+        return pd.DataFrame(columns=['pessoa', 'tipo', 'item', 'mes_ano', 'valor'])
+    return df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == tipo)]
 
-@st.cache_data(ttl=300)
-def carregar_comuns():
-    query = "SELECT id, item, valor, pagador FROM gastos_comuns"
-    df = pd.read_sql(text(query), engine)
-    if 'pagador' not in df.columns:
-        df['pagador'] = 'Dividido (50/50)'
-    return df
+def get_fixos(pessoa):
+    if df_fixos_all.empty:
+        return pd.DataFrame(columns=['id', 'item', 'valor'])
+    return df_fixos_all[df_fixos_all['pessoa'] == pessoa][['id', 'item', 'valor']]
 
-@st.cache_data(ttl=300)
-def carregar_todos_pontuais():
-    query = "SELECT id, mes_ano, pessoa, descricao, categoria, valor FROM pontuais_dinheiro"
-    return pd.read_sql(text(query), engine)
+def get_programado_cartao(pessoa):
+    if df_prog_all.empty:
+        return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
+    return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-@st.cache_data(ttl=300)
-def carregar_caixinha():
-    query = "SELECT mes_ano, valor FROM caixinha"
-    return pd.read_sql(text(query), engine)
-
-@st.cache_data(ttl=300)
-def carregar_programado_cartao(pessoa):
-    query = "SELECT id, cartao, descricao, valor FROM programado_cartao WHERE pessoa = :pessoa"
-    return pd.read_sql(text(query), engine, params={"pessoa": pessoa})
-
-@st.cache_data(ttl=300)
-def carregar_status_faturas():
-    query = "SELECT * FROM status_faturas"
-    return pd.read_sql(text(query), engine)
-
-# 8. Funções de Escrita com Tratamento Seguro de Erros
+# 8. Funções de Escrita
 def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
@@ -319,6 +311,11 @@ def salvar_status_fatura(pessoa, mes_ano, fechada):
             DO UPDATE SET fechada = EXCLUDED.fechada;
         '''
         conn.execute(text(query), {"pessoa": pessoa, "mes_ano": mes_ano, "fechada": fechada})
+
+def resetar_todos_status_faturas():
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM status_faturas;"))
+    st.cache_data.clear()
 
 def inserir_gasto_rapido(mes_ano, pessoa, descricao, categoria, valor):
     with engine.begin() as conn:
@@ -364,51 +361,48 @@ def salvar_programado_cartao(pessoa, df_editado):
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
 
-# 9. LÓGICA DE CÁLCULO FINANCEIRO
+# 9. LÓGICA DE CÁLCULO FINANCEIRO OTIMIZADA
 def calcular_sequencia_financeira():
-    rec_all_db = carregar_todas_projecoes("RECEITA")
-    cart_all_db = carregar_todas_projecoes("CARTAO")
-    status_fat_db = carregar_status_faturas()
+    prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
+    prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     
-    prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum()
-    prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum()
+    fix_p1 = get_fixos("Pessoa 1")['valor'].apply(safe_float).sum() if not df_fixos_all.empty else 0.0
+    fix_p2 = get_fixos("Pessoa 2")['valor'].apply(safe_float).sum() if not df_fixos_all.empty else 0.0
     
-    fix_p1 = carregar_fixos("Pessoa 1")['valor'].apply(safe_float).sum()
-    fix_p2 = carregar_fixos("Pessoa 2")['valor'].apply(safe_float).sum()
-    
-    df_comuns = carregar_comuns()
-    comuns_val_total = df_comuns['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
-    
-    comuns_p1 = df_comuns[df_comuns['pagador'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
-    comuns_p2 = df_comuns[df_comuns['pagador'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
-    comuns_div = df_comuns[df_comuns['pagador'] == 'Dividido (50/50)']['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
+    comuns_val_total = df_comuns_all['valor'].apply(safe_float).sum() if not df_comuns_all.empty else 0.0
+    comuns_p1 = df_comuns_all[df_comuns_all['pagador'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not df_comuns_all.empty else 0.0
+    comuns_p2 = df_comuns_all[df_comuns_all['pagador'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not df_comuns_all.empty else 0.0
+    comuns_div = df_comuns_all[df_comuns_all['pagador'] == 'Dividido (50/50)']['valor'].apply(safe_float).sum() if not df_comuns_all.empty else 0.0
     
     tot_fixos = fix_p1 + fix_p2 + comuns_val_total
-    
-    caixinha_df = carregar_caixinha()
-    todos_pontuais_df = carregar_todos_pontuais()
 
     dados_meses = {}
     saldo_acumulado_anterior = 0.0
 
     for m in TODOS_MESES_SISTEMA:
-        r_p1 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 1')]['valor'].apply(safe_float).sum() if not rec_all_db.empty else 0.0
-        r_p2 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 2')]['valor'].apply(safe_float).sum() if not rec_all_db.empty else 0.0
+        # Receitas
+        r_p1 = df_proj_all[(df_proj_all['mes_ano'] == m) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+        r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         renda_mes = r_p1 + r_p2
 
-        c_p1 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 1')]['valor'].apply(safe_float).sum() if not cart_all_db.empty else 0.0
-        c_p2 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 2')]['valor'].apply(safe_float).sum() if not cart_all_db.empty else 0.0
+        # Cartões
+        c_p1 = df_proj_all[(df_proj_all['mes_ano'] == m) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+        c_p2 = df_proj_all[(df_proj_all['mes_ano'] == m) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         
-        st1_match = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 1') & (status_fat_db['mes_ano'] == m)] if not status_fat_db.empty else pd.DataFrame()
-        f1_fechada = bool(st1_match['fechada'].iloc[0]) if not st1_match.empty else False
+        # Status de Fatura Fechada
+        f1_fechada = False
+        f2_fechada = False
+        if not df_status_all.empty:
+            st1 = df_status_all[(df_status_all['pessoa'] == 'Pessoa 1') & (df_status_all['mes_ano'] == m)]
+            f1_fechada = bool(st1['fechada'].iloc[0]) if not st1.empty else False
+            st2 = df_status_all[(df_status_all['pessoa'] == 'Pessoa 2') & (df_status_all['mes_ano'] == m)]
+            f2_fechada = bool(st2['fechada'].iloc[0]) if not st2.empty else False
 
-        st2_match = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 2') & (status_fat_db['mes_ano'] == m)] if not status_fat_db.empty else pd.DataFrame()
-        f2_fechada = bool(st2_match['fechada'].iloc[0]) if not st2_match.empty else False
+        add_prog_p1 = 0.0 if f1_fechada else prog_p1
+        add_prog_p2 = 0.0 if f2_fechada else prog_p2
 
-        add_prog_p1 = 0.0 if f1_fechada else prog_cart_p1
-        add_prog_p2 = 0.0 if f2_fechada else prog_cart_p2
-
-        p_df = todos_pontuais_df[todos_pontuais_df['mes_ano'] == m] if not todos_pontuais_df.empty else pd.DataFrame()
+        # Pontuais
+        p_df = df_pontuais_all[df_pontuais_all['mes_ano'] == m] if not df_pontuais_all.empty else pd.DataFrame()
         pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
         pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
         pont_comum = p_df[p_df['pessoa'] == 'Comum / Casa']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
@@ -417,7 +411,7 @@ def calcular_sequencia_financeira():
         gasto_exclusivo_p1 = (c_p1 + add_prog_p1) + fix_p1 + pont_p1 + comuns_p1 + (comuns_div / 2)
         gasto_exclusivo_p2 = (c_p2 + add_prog_p2) + fix_p2 + pont_p2 + comuns_p2 + (comuns_div / 2)
 
-        caixinha_mes = caixinha_df[caixinha_df['mes_ano'] == m]['valor'].apply(safe_float).sum() if not caixinha_df.empty else 0.0
+        caixinha_mes = df_caixinha_all[df_caixinha_all['mes_ano'] == m]['valor'].apply(safe_float).sum() if not df_caixinha_all.empty else 0.0
 
         saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
@@ -475,12 +469,18 @@ with col_logout_btn:
         st.rerun()
 
 # CONTROLES TEMPORAIS
-c_sel1, c_sel2 = st.columns([6, 4])
+c_sel1, c_sel2, c_reset = st.columns([5, 4, 3])
 with c_sel1:
     mes_atual = st.selectbox("📅 Selecione o Mês Atual de Trabalho (Arquiva Anteriores):", TODOS_MESES_SISTEMA[:24], index=0)
     st.session_state["mes_atual_sel"] = mes_atual
 with c_sel2:
     modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
+with c_reset:
+    st.write("")
+    if st.button("🔄 Resetar Status Faturas", help="Limpa do banco todos os status de Fatura Fechada acumulados"):
+        resetar_todos_status_faturas()
+        st.success("Status de faturas resetados no banco!")
+        st.rerun()
 
 idx_foco = TODOS_MESES_SISTEMA.index(mes_atual)
 qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
@@ -576,7 +576,7 @@ tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
 
 def renderizar_pessoa(pessoa, p_code):
     st.subheader("💵 1. Receitas (Salário e Rendimentos)")
-    df_rec_db = carregar_projecao(pessoa, "RECEITA")
+    df_rec_db = get_projecao(pessoa, "RECEITA")
     rows_rec = []
     for item in ESTRUTURA_RECEITAS[pessoa]:
         row_dict = {"Item": item}
@@ -596,14 +596,10 @@ def renderizar_pessoa(pessoa, p_code):
 
     st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
     
-    # Sincronização Estrita de Estado para Evitar Herança de Checkbox Entre Meses
-    status_df = carregar_status_faturas()
-    st_match = status_df[(status_df['pessoa'] == pessoa) & (status_df['mes_ano'] == mes_atual)] if not status_df.empty else pd.DataFrame()
+    st_match = df_status_all[(df_status_all['pessoa'] == pessoa) & (df_status_all['mes_ano'] == mes_atual)] if not df_status_all.empty else pd.DataFrame()
     is_closed_db = bool(st_match['fechada'].iloc[0]) if not st_match.empty else False
     
     key_chk = f"chk_fat_{p_code}_{mes_atual}"
-    
-    # Atualiza a chave no session_state diretamente do Banco de Dados se o mês mudou
     if key_chk not in st.session_state:
         st.session_state[key_chk] = is_closed_db
 
@@ -617,7 +613,7 @@ def renderizar_pessoa(pessoa, p_code):
         st.cache_data.clear()
         st.rerun()
 
-    df_cart_db = carregar_projecao(pessoa, "CARTAO")
+    df_cart_db = get_projecao(pessoa, "CARTAO")
     rows_cart = []
     for item in ESTRUTURA_CARTÕES[pessoa]:
         row_dict = {"Item": item}
@@ -636,7 +632,7 @@ def renderizar_pessoa(pessoa, p_code):
     st.divider()
 
     st.subheader("🔮 3. Lançamentos Programados no Cartão (Seguros / Assinaturas Futuras)")
-    df_prog_cart = carregar_programado_cartao(pessoa)
+    df_prog_cart = get_programado_cartao(pessoa)
     df_prog_edit = st.data_editor(
         df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}", height=150,
         column_config={
@@ -650,7 +646,7 @@ def renderizar_pessoa(pessoa, p_code):
     st.divider()
 
     st.subheader("📌 4. Gastos Fixos Individuais Recorrentes")
-    df_fixos_db = carregar_fixos(pessoa)
+    df_fixos_db = get_fixos(pessoa)
     df_fixos_edit = st.data_editor(
         df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}", height=150,
         column_config={
@@ -663,8 +659,7 @@ def renderizar_pessoa(pessoa, p_code):
     st.divider()
 
     st.subheader("💸 5. Extrato de Gastos Esporádicos (PIX / Dinheiro)")
-    todos_pontuais = carregar_todos_pontuais()
-    pontuais_p = todos_pontuais[(todos_pontuais['pessoa'] == pessoa) & (todos_pontuais['mes_ano'] == mes_atual)]
+    pontuais_p = df_pontuais_all[(df_pontuais_all['pessoa'] == pessoa) & (df_pontuais_all['mes_ano'] == mes_atual)] if not df_pontuais_all.empty else pd.DataFrame()
     
     if not pontuais_p.empty:
         for _, g in pontuais_p.iterrows():
@@ -686,9 +681,8 @@ with tab_p2:
 
 with tab_comuns:
     st.header("🏡 Despesas Comuns do Casal / Casa")
-    df_comuns_db = carregar_comuns()
     df_comuns_edit = st.data_editor(
-        df_comuns_db, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
+        df_comuns_all, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
         column_config={
             "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
             "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0),
@@ -701,11 +695,9 @@ with tab_consolidado:
     st.header("🏠 Visão Consolidada, Caixinha & Totais")
     
     st.subheader("📦 Caixinha de Reserva da Família (Acumulativa)")
-    df_caixinha_db = carregar_caixinha()
     rows_caixinha = []
-    
     for mes in meses_visiveis:
-        val = df_caixinha_db[df_caixinha_db['mes_ano'] == mes]['valor']
+        val = df_caixinha_all[df_caixinha_all['mes_ano'] == mes]['valor'] if not df_caixinha_all.empty else pd.Series()
         val_aporte = safe_float(val.iloc[0]) if not val.empty else 0.0
         rows_caixinha.append({"Mês": mes, "Aporte do Mês (R$)": val_aporte})
         
