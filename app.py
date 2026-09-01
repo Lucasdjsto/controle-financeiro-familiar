@@ -36,7 +36,7 @@ def verificar_senha():
         return True
 
     st.title("🔒 Acesso Restrito - Gestão Financeira")
-    senha_correta = os.getenv("APP_PASSWORD", "123456")
+    senha_correta = os.getenv("APP_PASSWORD") or st.secrets.get("APP_PASSWORD", "123456")
     
     with st.form("form_login"):
         senha_digitada = st.text_input("Digite a senha de acesso:", type="password")
@@ -52,15 +52,20 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão com o Banco Supabase
+# 4. Conexão com o Banco Supabase (Compatível com Render e Streamlit Cloud)
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL")
+    if not db_url and "POSTGRES_URL" in st.secrets:
+        db_url = st.secrets["POSTGRES_URL"]
+
     if not db_url:
-        st.error("❌ Variável POSTGRES_URL não configurada no Render.")
+        st.error("❌ Variável POSTGRES_URL não configurada.")
         st.stop()
+
     if "sslmode" not in db_url:
         db_url += "?sslmode=require" if "?" not in db_url else "&sslmode=require"
+
     return create_engine(db_url, connect_args={"connect_timeout": 10}, pool_pre_ping=True)
 
 engine = get_db_engine()
@@ -120,7 +125,7 @@ ESTRUTURA_RECEITAS = {
     "Pessoa 2": ["Salário Base", "Receita Extra"]
 }
 
-# 7. Persistência
+# 7. Funções de Persistência
 def carregar_projecao(pessoa, tipo):
     return pd.read_sql(text("SELECT * FROM projecao WHERE pessoa = :pessoa AND tipo = :tipo"), engine, params={"pessoa": pessoa, "tipo": tipo})
 
@@ -181,7 +186,7 @@ def salvar_caixinha(df_editado):
             conn.execute(text("INSERT INTO caixinha (mes_ano, valor) VALUES (:mes, :val) ON CONFLICT (mes_ano) DO UPDATE SET valor = EXCLUDED.valor;"),
                          {"mes": mes, "val": val})
 
-# 8. Cabecalho
+# 8. Cabeçalho e Logout
 col_head, col_logout = st.columns([8, 2])
 with col_head:
     st.title("📊 Gestão Financeira Familiar")
@@ -330,7 +335,6 @@ with tab3:
         st.success("Caixinha atualizada!")
         st.rerun()
 
-    # Cálculo da Caixinha
     acum_caix = 0.0
     d_caix_acum, d_caix_mes = {}, {}
     for _, r in df_caix_edit.iterrows():
@@ -339,7 +343,6 @@ with tab3:
         d_caix_mes[m] = val
         d_caix_acum[m] = acum_caix
 
-    # Lógica Completa com PIX de Acerto
     def processar_fechamento():
         rec_p1_all = carregar_projecao("Pessoa 1", "RECEITA")
         rec_p2_all = carregar_projecao("Pessoa 2", "RECEITA")
@@ -359,7 +362,6 @@ with tab3:
             c2 = cart_p2_all[m].sum() if m in cart_p2_all.columns else 0.0
             
             df_p = carregar_pontuais(m)
-            # Separação por tipo de débito e pagador
             p1_diario = df_p[(df_p['pessoa'] == 'Pessoa 1') & (df_p['tipo_debito'] == 'Diário (Mês Atual)')]['valor'].sum() if not df_p.empty else 0.0
             p2_diario = df_p[(df_p['pessoa'] == 'Pessoa 2') & (df_p['tipo_debito'] == 'Diário (Mês Atual)')]['valor'].sum() if not df_p.empty else 0.0
             
@@ -369,18 +371,15 @@ with tab3:
             com_diario = df_p[(df_p['pessoa'] == 'Comum / Casa') & (df_p['tipo_debito'] == 'Diário (Mês Atual)')]['valor'].sum() if not df_p.empty else 0.0
             com_pre = df_p[(df_p['pessoa'] == 'Comum / Casa') & (df_p['tipo_debito'] != 'Diário (Mês Atual)')]['valor'].sum() if not df_p.empty else 0.0
 
-            # Gastos fixos da casa distribuídos pelo pagador titular
             com_p1 = df_comuns_data[df_comuns_data['pagador'] == 'Pessoa 1']['valor'].sum() if not df_comuns_data.empty else 0.0
             com_p2 = df_comuns_data[df_comuns_data['pagador'] == 'Pessoa 2']['valor'].sum() if not df_comuns_data.empty else 0.0
 
-            # Desembolso Real de Cada Um no Mês
             desembolso_p1 = c1 + fixos_p1_val + com_p1 + p1_diario + p1_pre
             desembolso_p2 = c2 + fixos_p2_val + com_p2 + p2_diario + p2_pre + com_diario + com_pre
 
             desp_casa_total = com_p1 + com_p2 + com_diario + com_pre
             metade_casa = desp_casa_total / 2.0
             
-            # Cálculo do PIX de Acerto
             pago_p1_casa = com_p1
             pago_p2_casa = com_p2 + com_diario + com_pre
             
@@ -413,7 +412,6 @@ with tab3:
     mes_f = st.selectbox("Selecione o mês para exame detalhado:", MESES_PROJECAO, index=0)
     tf = totais_f[mes_f]
 
-    # Painel de Compensação (Clearing House)
     dif = tf["diferenca_acerto"]
     if dif > 0:
         st.info(f"🔄 **PIX de Acerto de Contas ({mes_f}):** Marcella (Pessoa 2) deve transferir **R$ {abs(dif):,.2f}** para Lucas (Pessoa 1) para igualar as despesas da casa.")
@@ -440,7 +438,6 @@ with tab3:
 
     st.divider()
 
-    # DASHBOARDS
     st.subheader("📊 Dashboards da Família")
     g1, g2 = st.columns(2)
     with g1:
@@ -456,7 +453,6 @@ with tab3:
 
     st.divider()
 
-    # TABELA EVOLUTIVA FINAL
     st.subheader("📅 Tabela de Projeção Evolutiva (2026 - 2030)")
     
     r_ant = {"Métrica": "1. Saldo do Mês Anterior"}
@@ -482,7 +478,6 @@ with tab3:
     df_final = pd.DataFrame([r_ant, r_rec, r_dp1, r_dp2, r_caix_m, r_desp_t, r_sobra, r_caix_a])
     st.dataframe(df_final, use_container_width=True, column_config={m: st.column_config.NumberColumn(format="R$ %.2f") for m in MESES_PROJECAO})
 
-    # Download Excel
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_final.to_excel(writer, sheet_name='Projecao_Financeira', index=False)
