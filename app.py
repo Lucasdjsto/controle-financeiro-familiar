@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Dinâmico (Flexbox Responsivo e Botão Compacto)
+# 2. Injeção de CSS Dinâmico (Flexbox Responsivo)
 st.markdown("""
     <style>
         .block-container {
@@ -70,7 +70,6 @@ st.markdown("""
             font-weight: 600;
         }
 
-        /* Ajuste Fino de Botão de Salvamento no PC */
         .stButton > button {
             border-radius: 8px;
             font-weight: 600;
@@ -141,7 +140,7 @@ def get_db_engine():
 
 engine = get_db_engine()
 
-# 5. Inicialização das Tabelas no Banco
+# 5. Inicialização das Tabelas no Banco (com suporte a pagador nas comuns)
 def init_db():
     with engine.begin() as conn:
         conn.execute(text('''
@@ -166,7 +165,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS gastos_comuns (
                 id SERIAL PRIMARY KEY,
                 item TEXT,
-                valor DOUBLE PRECISION DEFAULT 0
+                valor DOUBLE PRECISION DEFAULT 0,
+                pagador TEXT DEFAULT 'Dividido (50/50)'
             );
         '''))
         conn.execute(text('''
@@ -240,8 +240,11 @@ def carregar_fixos(pessoa):
 
 @st.cache_data(ttl=600)
 def carregar_comuns():
-    query = "SELECT id, item, valor FROM gastos_comuns"
-    return pd.read_sql(text(query), engine)
+    query = "SELECT id, item, valor, pagador FROM gastos_comuns"
+    df = pd.read_sql(text(query), engine)
+    if 'pagador' not in df.columns:
+        df['pagador'] = 'Dividido (50/50)'
+    return df
 
 @st.cache_data(ttl=600)
 def carregar_pontuais(mes_ano):
@@ -291,8 +294,9 @@ def salvar_comuns(df_editado):
         conn.execute(text("DELETE FROM gastos_comuns"))
         for _, row in df_editado.iterrows():
             if str(row['item']).strip():
-                query = "INSERT INTO gastos_comuns (item, valor) VALUES (:item, :val)"
-                conn.execute(text(query), {"item": str(row['item']), "val": float(row['valor'])})
+                pag = str(row.get('pagador', 'Dividido (50/50)'))
+                query = "INSERT INTO gastos_comuns (item, valor, pagador) VALUES (:item, :val, :pag)"
+                conn.execute(text(query), {"item": str(row['item']), "val": float(row['valor']), "pag": pag})
 
 def salvar_pontuais(mes_ano, df_editado):
     with engine.begin() as conn:
@@ -339,8 +343,16 @@ def calcular_sequencia_financeira():
     
     fix_p1 = carregar_fixos("Pessoa 1")['valor'].sum()
     fix_p2 = carregar_fixos("Pessoa 2")['valor'].sum()
-    comuns_val = carregar_comuns()['valor'].sum()
-    tot_fixos = fix_p1 + fix_p2 + comuns_val
+    
+    df_comuns = carregar_comuns()
+    comuns_val_total = df_comuns['valor'].sum() if not df_comuns.empty else 0.0
+    
+    # Atribuição das despesas comuns conforme o Pagador
+    comuns_p1 = df_comuns[df_comuns['pagador'] == 'Pessoa 1']['valor'].sum() if not df_comuns.empty else 0.0
+    comuns_p2 = df_comuns[df_comuns['pagador'] == 'Pessoa 2']['valor'].sum() if not df_comuns.empty else 0.0
+    comuns_div = df_comuns[df_comuns['pagador'] == 'Dividido (50/50)']['valor'].sum() if not df_comuns.empty else 0.0
+    
+    tot_fixos = fix_p1 + fix_p2 + comuns_val_total
     
     caixinha_df = carregar_caixinha()
     todos_pontuais_df = carregar_todos_pontuais()
@@ -358,16 +370,16 @@ def calcular_sequencia_financeira():
         c_p1 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 1')]['valor'].sum() if not cart_all_db.empty else 0.0
         c_p2 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 2')]['valor'].sum() if not cart_all_db.empty else 0.0
         
-        # Pontuais Individuais e Comuns
+        # Pontuais
         p_df = todos_pontuais_df[todos_pontuais_df['mes_ano'] == m] if not todos_pontuais_df.empty else pd.DataFrame()
         pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].sum() if not p_df.empty else 0.0
         pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].sum() if not p_df.empty else 0.0
         pont_comum = p_df[p_df['pessoa'] == 'Comum / Casa']['valor'].sum() if not p_df.empty else 0.0
         pontual_mes = pont_p1 + pont_p2 + pont_comum
 
-        # Total Exclusivo por Pessoa
-        gasto_exclusivo_p1 = (c_p1 + prog_cart_p1) + fix_p1 + pont_p1
-        gasto_exclusivo_p2 = (c_p2 + prog_cart_p2) + fix_p2 + pont_p2
+        # Total Exclusivo por Pessoa (Considerando a atribuição da Despesa Comum)
+        gasto_exclusivo_p1 = (c_p1 + prog_cart_p1) + fix_p1 + pont_p1 + comuns_p1 + (comuns_div / 2)
+        gasto_exclusivo_p2 = (c_p2 + prog_cart_p2) + fix_p2 + pont_p2 + comuns_p2 + (comuns_div / 2)
 
         caixinha_mes = caixinha_df[caixinha_df['mes_ano'] == m]['valor'].sum() if not caixinha_df.empty else 0.0
 
@@ -383,7 +395,6 @@ def calcular_sequencia_financeira():
             "renda_p2": r_p2,
             "gasto_p1": gasto_exclusivo_p1,
             "gasto_p2": gasto_exclusivo_p2,
-            "despesas_comuns": comuns_val + pont_comum,
             "saidas_mes": saidas_mes,
             "caixinha_mes": caixinha_mes,
             "sobra_mes_isolada": sobra_do_mes_bruta,
@@ -402,7 +413,7 @@ with col_head:
     st.title("📊 Painel Financeiro Integrado")
 
 with col_save_btn:
-    st.write("") # Espaçador visual
+    st.write("")
     if st.button("💾 SALVAR ALTERAÇÕES", type="primary", use_container_width=True):
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
         if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
@@ -422,7 +433,7 @@ with col_save_btn:
         st.rerun()
 
 with col_logout_btn:
-    st.write("") # Espaçador visual
+    st.write("")
     if st.button("🚪 Sair", use_container_width=True):
         st.session_state["autenticado"] = False
         st.rerun()
@@ -582,7 +593,8 @@ with tab_comuns:
         df_comuns_db, num_rows="dynamic", use_container_width=True, key="comuns_editor",
         column_config={
             "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
-            "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0)
+            "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0),
+            "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
         }
     )
     st.session_state["comuns_df"] = df_comuns_edit
