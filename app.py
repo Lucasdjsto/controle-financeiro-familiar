@@ -290,52 +290,80 @@ with col_logout:
         st.session_state["autenticado"] = False
         st.rerun()
 
-# 10. CARD DE LIQUIDEZ INSTANTÂNEA (COM SELETOR DE MÊS)
+# 10. LÓGICA DE CÁLCULO DE CAIXA E ACÚMULO SEQUENCIAL
+def calcular_sequencia_financeira():
+    rec_p1_db = carregar_projecao("Pessoa 1", "RECEITA")
+    rec_p2_db = carregar_projecao("Pessoa 2", "RECEITA")
+    cart_p1_db = carregar_projecao("Pessoa 1", "CARTAO")
+    cart_p2_db = carregar_projecao("Pessoa 2", "CARTAO")
+    
+    prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].sum()
+    prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].sum()
+    
+    tot_prov_din = carregar_dinheiro_provisionado("Pessoa 1")['valor'].sum() + carregar_dinheiro_provisionado("Pessoa 2")['valor'].sum()
+    tot_fixos = carregar_fixos("Pessoa 1")['valor'].sum() + carregar_fixos("Pessoa 2")['valor'].sum() + carregar_comuns()['valor'].sum()
+    
+    caixinha_df = carregar_caixinha()
+    todos_pontuais_df = carregar_todos_pontuais()
+
+    dados_meses = {}
+    saldo_acumulado_anterior = 0.0
+
+    for m in MESES_PROJECAO:
+        r1 = rec_p1_db[rec_p1_db['mes_ano'] == m]['valor'].sum() if not rec_p1_db.empty else 0.0
+        r2 = rec_p2_db[rec_p2_db['mes_ano'] == m]['valor'].sum() if not rec_p2_db.empty else 0.0
+        renda_mes = r1 + r2
+        
+        c1 = cart_p1_db[cart_p1_db['mes_ano'] == m]['valor'].sum() if not cart_p1_db.empty else 0.0
+        c2 = cart_p2_db[cart_p2_db['mes_ano'] == m]['valor'].sum() if not cart_p2_db.empty else 0.0
+        cartao_mes = c1 + c2 + prog_cart_p1 + prog_cart_p2
+        
+        p_df = todos_pontuais_df[todos_pontuais_df['mes_ano'] == m] if not todos_pontuais_df.empty else pd.DataFrame()
+        pontual_mes = p_df['valor'].sum() if not p_df.empty else 0.0
+        
+        caixinha_mes = caixinha_df[caixinha_df['mes_ano'] == m]['valor'].sum() if not caixinha_df.empty else 0.0
+
+        saidas_mes = cartao_mes + tot_fixos + pontual_mes + tot_prov_din + caixinha_mes
+        sobra_do_mes_bruta = renda_mes - saidas_mes
+        
+        saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
+
+        dados_meses[m] = {
+            "saldo_anterior": saldo_acumulado_anterior,
+            "renda_mes": renda_mes,
+            "disponivel_total": saldo_acumulado_anterior + renda_mes,
+            "saidas_mes": saidas_mes,
+            "caixinha_mes": caixinha_mes,
+            "sobra_mes_isolada": sobra_do_mes_bruta,
+            "saldo_acumulado_final": saldo_conta_final
+        }
+
+        saldo_acumulado_anterior = saldo_conta_final
+
+    return dados_meses
+
+dados_financeiros = calcular_sequencia_financeira()
+
+# --- CARD DE LIQUIDEZ INSTANTÂNEA (COM SELETOR DE MÊS) ---
 col_tit, col_sel = st.columns([7, 3])
 with col_tit:
     st.markdown("### ⚡ Situação Atual do Mês")
 with col_sel:
     mes_atual = st.selectbox("Selecione o Mês para Análise:", MESES_PROJECAO, index=0)
 
-rec_p1_db = carregar_projecao("Pessoa 1", "RECEITA")
-rec_p2_db = carregar_projecao("Pessoa 2", "RECEITA")
+d_foco = dados_financeiros[mes_atual]
 
-tot_rec_p1 = rec_p1_db[rec_p1_db['mes_ano'] == mes_atual]['valor'].sum() if not rec_p1_db.empty else 0.0
-tot_rec_p2 = rec_p2_db[rec_p2_db['mes_ano'] == mes_atual]['valor'].sum() if not rec_p2_db.empty else 0.0
-tot_rec = tot_rec_p1 + tot_rec_p2
+k1, k2, k3, k4, k5 = st.columns(5)
+k1.metric("Saldo Inicial Em Conta", f"R$ {d_foco['saldo_anterior']:,.2f}")
+k2.metric("Renda do Mês", f"R$ {d_foco['renda_mes']:,.2f}")
+k3.metric("Saídas Totais", f"R$ {d_foco['saidas_mes']:,.2f}")
+k4.metric("Aporte Caixinha", f"R$ {d_foco['caixinha_mes']:,.2f}")
 
-cart_p1_db = carregar_projecao("Pessoa 1", "CARTAO")
-cart_p2_db = carregar_projecao("Pessoa 2", "CARTAO")
-
-tot_cart_p1 = cart_p1_db[cart_p1_db['mes_ano'] == mes_atual]['valor'].sum() if not cart_p1_db.empty else 0.0
-tot_cart_p2 = cart_p2_db[cart_p2_db['mes_ano'] == mes_atual]['valor'].sum() if not cart_p2_db.empty else 0.0
-
-prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].sum()
-prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].sum()
-
-tot_cart = tot_cart_p1 + tot_cart_p2 + prog_cart_p1 + prog_cart_p2
-
-tot_prov_din = carregar_dinheiro_provisionado("Pessoa 1")['valor'].sum() + carregar_dinheiro_provisionado("Pessoa 2")['valor'].sum()
-tot_fixos = carregar_fixos("Pessoa 1")['valor'].sum() + carregar_fixos("Pessoa 2")['valor'].sum() + carregar_comuns()['valor'].sum()
-
-pontuais_df = carregar_pontuais(mes_atual)
-tot_pontuais = pontuais_df['valor'].sum() if not pontuais_df.empty else 0.0
-
-caixinha_df = carregar_caixinha()
-cax_val = caixinha_df[caixinha_df['mes_ano'] == mes_atual]['valor'].sum() if not caixinha_df.empty else 0.0
-
-tot_despesas = tot_cart + tot_fixos + tot_pontuais + tot_prov_din + cax_val
-sobra_liquida = tot_rec - tot_despesas
-
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Renda Bruta", f"R$ {tot_rec:,.2f}")
-k2.metric("Saídas Totais (Cartão/Fixos/PIX)", f"R$ {tot_despesas:,.2f}")
-k3.metric("Aporte Caixinha", f"R$ {cax_val:,.2f}")
-
-if sobra_liquida >= 0:
-    k4.metric("Sobra do Mês", f"R$ {sobra_liquida:,.2f}", delta="Positivo", delta_color="normal")
+s_final = d_foco['saldo_acumulado_final']
+if s_final >= 0:
+    k5.metric("Saldo Acumulado Final", f"R$ {s_final:,.2f}", delta="Positivo", delta_color="normal")
 else:
-    k4.metric("Sombra/Déficit do Mês", f"R$ {sobra_liquida:,.2f}", delta="Negativo", delta_color="inverse")
+    k5.metric("Saldo Acumulado Final", f"R$ {s_final:,.2f}", delta="Déficit", delta_color="inverse")
 
 st.divider()
 
@@ -513,101 +541,30 @@ with tab_consolidado:
         salvar_caixinha(df_caixinha_edit)
         st.success("Aportes da caixinha salvos com sucesso!")
         st.rerun()
-        
-    acumulado = 0.0
-    dict_caixinha_acumulado = {}
-    dict_caixinha_mes = {}
-    for _, row in df_caixinha_edit.iterrows():
-        mes = row['Mês']
-        val = float(row['Aporte do Mês (R$)']) if pd.notnull(row['Aporte do Mês (R$)']) else 0.0
-        acumulado += val
-        dict_caixinha_mes[mes] = val
-        dict_caixinha_acumulado[mes] = acumulado
 
     st.divider()
 
-    total_comuns_fixos = df_comuns_edit['valor'].sum() if not df_comuns_edit.empty else 0.0
-    df_todos_pontuais = carregar_todos_pontuais()
+    st.subheader("📅 Projeção Evolutiva Mês a Mês & Saldo de Caixa Acumulado")
+    
+    row_sal_ini = {"Métrica": "1. Saldo Inicial em Conta"}
+    row_rec = {"Métrica": "2. Renda Total Família"}
+    row_desp = {"Métrica": "3. Saídas Totais (Cartão + Fixos + PIX)"}
+    row_caixinha = {"Métrica": "4. Aporte Caixinha (Mês)"}
+    row_sobra_mes = {"Métrica": "5. Sobra Líquida Isolada do Mês"}
+    row_sal_fim = {"Métrica": "6. Saldo Final Acumulado em Conta"}
 
-    def extrair_totais_completos():
-        prog_p1_sum = carregar_programado_cartao("Pessoa 1")['valor'].sum()
-        prog_p2_sum = carregar_programado_cartao("Pessoa 2")['valor'].sum()
-        
-        totais = {mes: {"rec_p1": 0, "cart_p1": 0, "fixos_p1": fixos_p1['valor'].sum(),
-                        "rec_p2": 0, "cart_p2": 0, "fixos_p2": fixos_p2['valor'].sum(),
-                        "comuns_fixos": total_comuns_fixos,
-                        "pont_p1": 0, "pont_p2": 0, "pont_comum": 0,
-                        "caixinha_mes": dict_caixinha_mes.get(mes, 0.0),
-                        "caixinha_acum": dict_caixinha_acumulado.get(mes, 0.0)} for mes in MESES_PROJECAO}
-        
-        for mes in MESES_PROJECAO:
-            totais[mes]["rec_p1"] = rec_p1[mes].sum()
-            totais[mes]["cart_p1"] = cart_p1[mes].sum() + prog_p1_sum
-            totais[mes]["rec_p2"] = rec_p2[mes].sum()
-            totais[mes]["cart_p2"] = cart_p2[mes].sum() + prog_p2_sum
-            
-            if not df_todos_pontuais.empty:
-                df_p = df_todos_pontuais[df_todos_pontuais['mes_ano'] == mes]
-                totais[mes]["pont_p1"] = df_p[df_p['pessoa'] == 'Pessoa 1']['valor'].sum() if not df_p.empty else 0
-                totais[mes]["pont_p2"] = df_p[df_p['pessoa'] == 'Pessoa 2']['valor'].sum() if not df_p.empty else 0
-                totais[mes]["pont_comum"] = df_p[df_p['pessoa'] == 'Comum / Casa']['valor'].sum() if not df_p.empty else 0
-            
-        return totais
-
-    totais_gerais = extrair_totais_completos()
-
-    st.subheader("📅 Projeção Evolutiva Mês a Mês & Total Geral")
-    
-    row_rec = {"Métrica": "1. Renda Total Família"}
-    row_p1 = {"Métrica": "2. Gastos Próprios - Pessoa 1"}
-    row_p2 = {"Métrica": "3. Gastos Próprios - Pessoa 2"}
-    row_comum = {"Métrica": "4. Despesas Comuns (Casa/Aluguel)"}
-    row_caixinha_m = {"Métrica": "5. Aporte Caixinha (Mês)"}
-    row_desp_t = {"Métrica": "6. Despesa Total Família + Caixinha"}
-    row_sobra = {"Métrica": "7. Sobra Líquida do Mês"}
-    row_caixinha_a = {"Métrica": "8. Caixinha Saldo Acumulado"}
-    
-    prov_din_p1_sum = carregar_dinheiro_provisionado("Pessoa 1")['valor'].sum()
-    prov_din_p2_sum = carregar_dinheiro_provisionado("Pessoa 2")['valor'].sum()
-    
-    tot_rec_g, tot_desp_g = 0, 0
-    
-    for mes in MESES_PROJECAO:
-        tg = totais_gerais[mes]
-        rf = tg["rec_p1"] + tg["rec_p2"]
-        dp1 = tg["cart_p1"] + tg["fixos_p1"] + tg["pont_p1"] + prov_din_p1_sum
-        dp2 = tg["cart_p2"] + tg["fixos_p2"] + tg["pont_p2"] + prov_din_p2_sum
-        dcom = tg["comuns_fixos"] + tg["pont_comum"]
-        c_m = tg["caixinha_mes"]
-        df_total = dp1 + dp2 + dcom + c_m
-        sf = rf - df_total
-        
-        row_rec[mes] = rf
-        row_p1[mes] = dp1
-        row_p2[mes] = dp2
-        row_comum[mes] = dcom
-        row_caixinha_m[mes] = c_m
-        row_desp_t[mes] = df_total
-        row_sobra[mes] = sf
-        row_caixinha_a[mes] = tg["caixinha_acum"]
-        
-        tot_rec_g += rf
-        tot_desp_g += df_total
-        
-    row_rec["TOTAL GERAL"] = tot_rec_g
-    row_p1["TOTAL GERAL"] = sum(totais_gerais[m]["cart_p1"] + totais_gerais[m]["fixos_p1"] + totais_gerais[m]["pont_p1"] for m in MESES_PROJECAO) + (prov_din_p1_sum * len(MESES_PROJECAO))
-    row_p2["TOTAL GERAL"] = sum(totais_gerais[m]["cart_p2"] + totais_gerais[m]["fixos_p2"] + totais_gerais[m]["pont_p2"] for m in MESES_PROJECAO) + (prov_din_p2_sum * len(MESES_PROJECAO))
-    row_comum["TOTAL GERAL"] = sum(totais_gerais[m]["comuns_fixos"] + totais_gerais[m]["pont_comum"] for m in MESES_PROJECAO)
-    row_caixinha_m["TOTAL GERAL"] = sum(totais_gerais[m]["caixinha_mes"] for m in MESES_PROJECAO)
-    row_desp_t["TOTAL GERAL"] = tot_desp_g
-    row_sobra["TOTAL GERAL"] = tot_rec_g - tot_desp_g
-    row_caixinha_a["TOTAL GERAL"] = dict_caixinha_acumulado[MESES_PROJECAO[-1]]
+    for m in MESES_PROJECAO:
+        d = dados_financeiros[m]
+        row_sal_ini[m] = d["saldo_anterior"]
+        row_rec[m] = d["renda_mes"]
+        row_desp[m] = d["saidas_mes"] - d["caixinha_mes"]
+        row_caixinha[m] = d["caixinha_mes"]
+        row_sobra_mes[m] = d["sobra_mes_isolada"]
+        row_sal_fim[m] = d["saldo_acumulado_final"]
 
     df_resumo = pd.DataFrame([
-        row_rec, row_p1, row_p2, row_comum, row_caixinha_m, row_desp_t, row_sobra, row_caixinha_a
+        row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim
     ])
     
     cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in MESES_PROJECAO}
-    cols_conf["TOTAL GERAL"] = st.column_config.NumberColumn("TOTAL GERAL PERÍODO", format="R$ %.2f")
-
     st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf)
