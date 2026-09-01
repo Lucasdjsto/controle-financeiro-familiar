@@ -1,36 +1,81 @@
 import os
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 from sqlalchemy import create_engine, text
 
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Otimizado para Layout Fluido e Cards
+# 2. Injeção de CSS Dinâmico (Flexbox Responsivo para PC e Mobile)
 st.markdown("""
     <style>
         .block-container {
             padding-top: 1.0rem !important;
             padding-bottom: 1.5rem !important;
-            padding-left: 1.0rem !important;
-            padding-right: 1.0rem !important;
+            padding-left: 0.8rem !important;
+            padding-right: 0.8rem !important;
         }
-        .stMetric {
+        
+        /* Container Flexbox Responsivo para o Painel Superior */
+        .metrics-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        
+        /* Card Individual Responsivo */
+        .metric-card {
             background-color: #1e293b;
-            padding: 10px 14px;
-            border-radius: 8px;
             border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 14px;
+            flex: 1 1 calc(20% - 12px); /* Tenta ocupar 20% no PC (5 cards por linha) */
+            min-width: 180px; /* Garante tamanho mínimo sem espremer */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
-        [data-testid="stMetricValue"] {
-            font-size: 1.3rem !important;
+        
+        .metric-label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        
+        .metric-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+        
+        .delta-positive {
+            color: #4ade80;
+            font-size: 0.8rem;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+        
+        .delta-negative {
+            color: #f87171;
+            font-size: 0.8rem;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+
+        /* Adaptação Automática para Telas Menores e Celular */
+        @media (max-width: 1024px) {
+            .metric-card {
+                flex: 1 1 calc(33.33% - 12px); /* 3 por linha em tablets */
+            }
         }
         @media (max-width: 640px) {
-            h1 { font-size: 1.4rem !important; }
-            h2 { font-size: 1.1rem !important; }
-            h3 { font-size: 1.0rem !important; }
-            [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
-            .stDataFrame { font-size: 0.8rem; }
+            .metric-card {
+                flex: 1 1 100%; /* 1 por linha no celular */
+            }
+            .metric-value {
+                font-size: 1.2rem;
+            }
         }
     </style>
 """, unsafe_allow_html=True)
@@ -160,7 +205,6 @@ def gerar_linha_tempo_dinamica(mes_inicio_str="08.2026", quantidade_meses=36):
             curr_y += 1
     return meses
 
-# Linha do tempo total do sistema (A partir da data base do histórico)
 TODOS_MESES_SISTEMA = gerar_linha_tempo_dinamica("08.2026", 48)
 
 ESTRUTURA_CARTÕES = {
@@ -293,7 +337,7 @@ def salvar_dinheiro_provisionado(pessoa, df_editado):
                 query = "INSERT INTO dinheiro_provisionado (pessoa, descricao, valor) VALUES (:pessoa, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "desc": str(row['descricao']), "val": float(row['valor'])})
 
-# 9. LÓGICA DE CÁLCULO DE CAIXA COMPLETA (DESDE A ORIGEM)
+# 9. LÓGICA DE CÁLCULO DE CAIXA COMPLETA
 def calcular_sequencia_financeira():
     rec_all_db = carregar_todas_projecoes("RECEITA")
     cart_all_db = carregar_todas_projecoes("CARTAO")
@@ -341,7 +385,7 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO E CONTROLE DE NAVEGAÇÃO TEMPORAL
+# 10. CABEÇALHO E BOTÃO DE SALVAMENTO
 col_head, col_save_all, col_logout = st.columns([6, 4, 1])
 with col_head:
     st.title("📊 Painel Financeiro Integrado")
@@ -372,7 +416,7 @@ with col_logout:
         st.session_state["autenticado"] = False
         st.rerun()
 
-# CONTROLES DO MÊS EM DESTAQUE (JANELA DESLIZANTE QUE ARQUIVA O PASSADO)
+# CONTROLES TEMPORAIS
 c_sel1, c_sel2 = st.columns([6, 4])
 with c_sel1:
     mes_atual = st.selectbox("📅 Selecione o Mês Atual de Trabalho (Arquiva Anteriores):", TODOS_MESES_SISTEMA[:24], index=0)
@@ -382,27 +426,43 @@ with c_sel2:
 idx_foco = TODOS_MESES_SISTEMA.index(mes_atual)
 qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
 
-# Janela visual das tabelas COMEÇA estritamente no mês atual selecionado
 meses_visiveis = TODOS_MESES_SISTEMA[idx_foco:idx_foco + qtd_meses]
 st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros[mes_atual]
 
-# CARDS SUPERIORES
+# PAINEL DINÂMICO (FLEXBOX ADAPTATIVO EM HTML/CSS)
 st.markdown(f"#### ⚡ Resumo Financeiro - {mes_atual}")
-k1, k2, k3 = st.columns(3)
-k1.metric("1. Saldo Inicial em Conta (Acumulado Passado)", f"R$ {d_foco['saldo_anterior']:,.2f}")
-k2.metric("2. Renda do Mês", f"R$ {d_foco['renda_mes']:,.2f}")
-k3.metric("3. Saídas Totais (Cartão/Fixos/PIX)", f"R$ {d_foco['saidas_mes']:,.2f}")
-
-k4, k5 = st.columns(2)
-k4.metric("4. Aporte Caixinha", f"R$ {d_foco['caixinha_mes']:,.2f}")
 
 s_final = d_foco['saldo_acumulado_final']
-if s_final >= 0:
-    k5.metric("5. Saldo Acumulado Final (Avança p/ Próximo Mês)", f"R$ {s_final:,.2f}", delta="Positivo", delta_color="normal")
-else:
-    k5.metric("5. Saldo Acumulado Final (Avança p/ Próximo Mês)", f"R$ {s_final:,.2f}", delta="Déficit", delta_color="inverse")
+delta_class = "delta-positive" if s_final >= 0 else "delta-negative"
+delta_label = "↑ Positivo" if s_final >= 0 else "↓ Déficit"
+
+st.markdown(f"""
+    <div class="metrics-container">
+        <div class="metric-card">
+            <div class="metric-label">1. Saldo Inicial em Conta</div>
+            <div class="metric-value">R$ {d_foco['saldo_anterior']:,.2f}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">2. Renda do Mês</div>
+            <div class="metric-value">R$ {d_foco['renda_mes']:,.2f}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">3. Saídas Totais (Cartão/Fixos/PIX)</div>
+            <div class="metric-value">R$ {d_foco['saidas_mes']:,.2f}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">4. Aporte Caixinha</div>
+            <div class="metric-value">R$ {d_foco['caixinha_mes']:,.2f}</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">5. Saldo Acumulado Final</div>
+            <div class="metric-value">R$ {s_final:,.2f}</div>
+            <div class="{delta_class}">{delta_label}</div>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 st.divider()
 
