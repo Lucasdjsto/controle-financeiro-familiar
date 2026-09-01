@@ -399,7 +399,6 @@ def calcular_sequencia_financeira():
         c_p1 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 1')]['valor'].apply(safe_float).sum() if not cart_all_db.empty else 0.0
         c_p2 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 2')]['valor'].apply(safe_float).sum() if not cart_all_db.empty else 0.0
         
-        # Leitura isolada por mês e por pessoa
         st1_match = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 1') & (status_fat_db['mes_ano'] == m)] if not status_fat_db.empty else pd.DataFrame()
         f1_fechada = bool(st1_match['fechada'].iloc[0]) if not st1_match.empty else False
 
@@ -597,18 +596,23 @@ def renderizar_pessoa(pessoa, p_code):
 
     st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
     
-    # Leitura estritamente isolada do status da fatura para o mês em destaque
+    # Sincronização Estrita de Estado para Evitar Herança de Checkbox Entre Meses
     status_df = carregar_status_faturas()
     st_match = status_df[(status_df['pessoa'] == pessoa) & (status_df['mes_ano'] == mes_atual)] if not status_df.empty else pd.DataFrame()
-    is_closed = bool(st_match['fechada'].iloc[0]) if not st_match.empty else False
+    is_closed_db = bool(st_match['fechada'].iloc[0]) if not st_match.empty else False
     
+    key_chk = f"chk_fat_{p_code}_{mes_atual}"
+    
+    # Atualiza a chave no session_state diretamente do Banco de Dados se o mês mudou
+    if key_chk not in st.session_state:
+        st.session_state[key_chk] = is_closed_db
+
     chk_fechada = st.checkbox(
         f"✅ Fatura de {mes_atual} Fechada / Processada (Desliga Provisões de {pessoa})", 
-        value=is_closed, 
-        key=f"chk_fat_{p_code}_{mes_atual}"
+        key=key_chk
     )
     
-    if chk_fechada != is_closed:
+    if chk_fechada != is_closed_db:
         salvar_status_fatura(pessoa, mes_atual, chk_fechada)
         st.cache_data.clear()
         st.rerun()
