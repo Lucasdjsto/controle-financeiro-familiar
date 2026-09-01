@@ -52,7 +52,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão com o Banco Supabase (Tratamento Dinâmico de Host e Secrets)
+# 4. Conexão com o Banco Supabase
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL")
@@ -63,15 +63,11 @@ def get_db_engine():
         st.error("❌ Variável POSTGRES_URL não configurada.")
         st.stop()
 
-    # Correção automática de host e porta para contornar cache DNS antigo do Streamlit
     if "db.zoamqfzdhpuxcigxhbgu.supabase.co" in db_url:
         db_url = db_url.replace(
             "db.zoamqfzdhpuxcigxhbgu.supabase.co:5432", 
             "aws-0-sa-east-1.pooler.supabase.com:6543"
-        ).replace(
-            "postgres:", 
-            "postgres.zoamqfzdhpuxcigxhbgu:"
-        )
+        ).replace("postgres:", "postgres.zoamqfzdhpuxcigxhbgu:")
 
     if "sslmode" not in db_url:
         db_url += "?sslmode=require" if "?" not in db_url else "&sslmode=require"
@@ -80,8 +76,7 @@ def get_db_engine():
 
 engine = get_db_engine()
 
-
-# 5. Inicialização do Banco
+# 5. Inicialização e Migração das Tabelas no Banco
 def init_db():
     with engine.begin() as conn:
         conn.execute(text('''
@@ -111,6 +106,13 @@ def init_db():
                 mes_ano TEXT PRIMARY KEY, valor DOUBLE PRECISION DEFAULT 0
             );
         '''))
+        
+        # MIGRAÇÕES: Garante que as novas colunas existam no banco existente
+        try:
+            conn.execute(text("ALTER TABLE gastos_comuns ADD COLUMN IF NOT EXISTS pagador TEXT DEFAULT 'Pessoa 1';"))
+            conn.execute(text("ALTER TABLE pontuais_dinheiro ADD COLUMN IF NOT EXISTS tipo_debito TEXT DEFAULT 'Diário (Mês Atual)';"))
+        except Exception:
+            pass
 
 init_db()
 
