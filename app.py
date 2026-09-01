@@ -290,10 +290,9 @@ with col_logout:
         st.session_state["autenticado"] = False
         st.rerun()
 
-# --- 10. CARD DE LIQUIDEZ INSTANTÂNEA (PRIMEIRA TELA - CORRIGIDO) ---
-mes_atual = MESES_PROJECAO[0]  # "08.2026"
+# 10. CARD DE LIQUIDEZ INSTANTÂNEA (PRIMEIRA TELA)
+mes_atual = MESES_PROJECAO[0]
 
-# 1. Carregamento e soma exata de Receitas do Mês Atual (Pessoa 1 + Pessoa 2)
 rec_p1_db = carregar_projecao("Pessoa 1", "RECEITA")
 rec_p2_db = carregar_projecao("Pessoa 2", "RECEITA")
 
@@ -301,7 +300,6 @@ tot_rec_p1 = rec_p1_db[rec_p1_db['mes_ano'] == mes_atual]['valor'].sum() if not 
 tot_rec_p2 = rec_p2_db[rec_p2_db['mes_ano'] == mes_atual]['valor'].sum() if not rec_p2_db.empty else 0.0
 tot_rec = tot_rec_p1 + tot_rec_p2
 
-# 2. Carregamento e soma exata do Cartão de Crédito do Mês Atual
 cart_p1_db = carregar_projecao("Pessoa 1", "CARTAO")
 cart_p2_db = carregar_projecao("Pessoa 2", "CARTAO")
 
@@ -313,7 +311,6 @@ prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].sum()
 
 tot_cart = tot_cart_p1 + tot_cart_p2 + prog_cart_p1 + prog_cart_p2
 
-# 3. Demais Despesas
 tot_prov_din = carregar_dinheiro_provisionado("Pessoa 1")['valor'].sum() + carregar_dinheiro_provisionado("Pessoa 2")['valor'].sum()
 tot_fixos = carregar_fixos("Pessoa 1")['valor'].sum() + carregar_fixos("Pessoa 2")['valor'].sum() + carregar_comuns()['valor'].sum()
 
@@ -323,11 +320,9 @@ tot_pontuais = pontuais_df['valor'].sum() if not pontuais_df.empty else 0.0
 caixinha_df = carregar_caixinha()
 cax_val = caixinha_df[caixinha_df['mes_ano'] == mes_atual]['valor'].sum() if not caixinha_df.empty else 0.0
 
-# 4. Cálculo da Liquidez Real
 tot_despesas = tot_cart + tot_fixos + tot_pontuais + tot_prov_din + cax_val
 sobra_liquida = tot_rec - tot_despesas
 
-# Renderização do Card Superior
 st.markdown(f"### ⚡ Situação Atual do Mês ({mes_atual})")
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Renda Bruta", f"R$ {tot_rec:,.2f}")
@@ -531,7 +526,7 @@ with tab_consolidado:
     total_comuns_fixos = df_comuns_edit['valor'].sum() if not df_comuns_edit.empty else 0.0
     df_todos_pontuais = carregar_todos_pontuais()
 
-def extrair_totais_completos():
+    def extrair_totais_completos():
         prog_p1_sum = carregar_programado_cartao("Pessoa 1")['valor'].sum()
         prog_p2_sum = carregar_programado_cartao("Pessoa 2")['valor'].sum()
         
@@ -569,13 +564,16 @@ def extrair_totais_completos():
     row_sobra = {"Métrica": "7. Sobra Líquida do Mês"}
     row_caixinha_a = {"Métrica": "8. Caixinha Saldo Acumulado"}
     
+    prov_din_p1_sum = carregar_dinheiro_provisionado("Pessoa 1")['valor'].sum()
+    prov_din_p2_sum = carregar_dinheiro_provisionado("Pessoa 2")['valor'].sum()
+    
     tot_rec_g, tot_desp_g = 0, 0
     
     for mes in MESES_PROJECAO:
         tg = totais_gerais[mes]
         rf = tg["rec_p1"] + tg["rec_p2"]
-        dp1 = tg["cart_p1"] + tg["fixos_p1"] + tg["pont_p1"] + prov_din_p1_df['valor'].sum()
-        dp2 = tg["cart_p2"] + tg["fixos_p2"] + tg["pont_p2"] + prov_din_p2_df['valor'].sum()
+        dp1 = tg["cart_p1"] + tg["fixos_p1"] + tg["pont_p1"] + prov_din_p1_sum
+        dp2 = tg["cart_p2"] + tg["fixos_p2"] + tg["pont_p2"] + prov_din_p2_sum
         dcom = tg["comuns_fixos"] + tg["pont_comum"]
         c_m = tg["caixinha_mes"]
         df_total = dp1 + dp2 + dcom + c_m
@@ -594,8 +592,8 @@ def extrair_totais_completos():
         tot_desp_g += df_total
         
     row_rec["TOTAL GERAL"] = tot_rec_g
-    row_p1["TOTAL GERAL"] = sum(totais_gerais[m]["cart_p1"] + totais_gerais[m]["fixos_p1"] + totais_gerais[m]["pont_p1"] for m in MESES_PROJECAO) + (prov_din_p1_df['valor'].sum() * len(MESES_PROJECAO))
-    row_p2["TOTAL GERAL"] = sum(totais_gerais[m]["cart_p2"] + totais_gerais[m]["fixos_p2"] + totais_gerais[m]["pont_p2"] for m in MESES_PROJECAO) + (prov_din_p2_df['valor'].sum() * len(MESES_PROJECAO))
+    row_p1["TOTAL GERAL"] = sum(totais_gerais[m]["cart_p1"] + totais_gerais[m]["fixos_p1"] + totais_gerais[m]["pont_p1"] for m in MESES_PROJECAO) + (prov_din_p1_sum * len(MESES_PROJECAO))
+    row_p2["TOTAL GERAL"] = sum(totais_gerais[m]["cart_p2"] + totais_gerais[m]["fixos_p2"] + totais_gerais[m]["pont_p2"] for m in MESES_PROJECAO) + (prov_din_p2_sum * len(MESES_PROJECAO))
     row_comum["TOTAL GERAL"] = sum(totais_gerais[m]["comuns_fixos"] + totais_gerais[m]["pont_comum"] for m in MESES_PROJECAO)
     row_caixinha_m["TOTAL GERAL"] = sum(totais_gerais[m]["caixinha_mes"] for m in MESES_PROJECAO)
     row_desp_t["TOTAL GERAL"] = tot_desp_g
