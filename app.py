@@ -84,7 +84,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Helper seguro para conversão de números (evita TypeError/ValueError)
+# Helper seguro para conversão de números
 def safe_float(val, default=0.0):
     try:
         if pd.isna(val) or val is None or str(val).strip() == "":
@@ -380,7 +380,7 @@ def calcular_sequencia_financeira():
     comuns_val_total = df_comuns['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
     
     comuns_p1 = df_comuns[df_comuns['pagador'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
-    comuns_p2 = df_comuns[df_comuns['pagador'] == 'Pessoa 2']['valor'].sum() if not df_comuns.empty else 0.0
+    comuns_p2 = df_comuns[df_comuns['pagador'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
     comuns_div = df_comuns[df_comuns['pagador'] == 'Dividido (50/50)']['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
     
     tot_fixos = fix_p1 + fix_p2 + comuns_val_total
@@ -399,8 +399,12 @@ def calcular_sequencia_financeira():
         c_p1 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 1')]['valor'].apply(safe_float).sum() if not cart_all_db.empty else 0.0
         c_p2 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 2')]['valor'].apply(safe_float).sum() if not cart_all_db.empty else 0.0
         
-        f1_fechada = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 1') & (status_fat_db['mes_ano'] == m)]['fechada'].iloc[0] if not status_fat_db.empty and not status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 1') & (status_fat_db['mes_ano'] == m)].empty else False
-        f2_fechada = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 2') & (status_fat_db['mes_ano'] == m)]['fechada'].iloc[0] if not status_fat_db.empty and not status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 2') & (status_fat_db['mes_ano'] == m)].empty else False
+        # Leitura isolada por mês e por pessoa
+        st1_match = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 1') & (status_fat_db['mes_ano'] == m)] if not status_fat_db.empty else pd.DataFrame()
+        f1_fechada = bool(st1_match['fechada'].iloc[0]) if not st1_match.empty else False
+
+        st2_match = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 2') & (status_fat_db['mes_ano'] == m)] if not status_fat_db.empty else pd.DataFrame()
+        f2_fechada = bool(st2_match['fechada'].iloc[0]) if not st2_match.empty else False
 
         add_prog_p1 = 0.0 if f1_fechada else prog_cart_p1
         add_prog_p2 = 0.0 if f2_fechada else prog_cart_p2
@@ -593,10 +597,17 @@ def renderizar_pessoa(pessoa, p_code):
 
     st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
     
+    # Leitura estritamente isolada do status da fatura para o mês em destaque
     status_df = carregar_status_faturas()
-    is_closed = status_df[(status_df['pessoa'] == pessoa) & (status_df['mes_ano'] == mes_atual)]['fechada'].iloc[0] if not status_df.empty and not status_df[(status_df['pessoa'] == pessoa) & (status_df['mes_ano'] == mes_atual)].empty else False
+    st_match = status_df[(status_df['pessoa'] == pessoa) & (status_df['mes_ano'] == mes_atual)] if not status_df.empty else pd.DataFrame()
+    is_closed = bool(st_match['fechada'].iloc[0]) if not st_match.empty else False
     
-    chk_fechada = st.checkbox(f"✅ Fatura de {mes_atual} Fechada / Processada (Desliga Provisões de {pessoa})", value=bool(is_closed), key=f"chk_fat_{p_code}")
+    chk_fechada = st.checkbox(
+        f"✅ Fatura de {mes_atual} Fechada / Processada (Desliga Provisões de {pessoa})", 
+        value=is_closed, 
+        key=f"chk_fat_{p_code}_{mes_atual}"
+    )
+    
     if chk_fechada != is_closed:
         salvar_status_fatura(pessoa, mes_atual, chk_fechada)
         st.cache_data.clear()
