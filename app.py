@@ -93,7 +93,7 @@ def safe_float(val, default=0.0):
     except (ValueError, TypeError):
         return default
 
-# 3. Autenticação por Senha
+# 3. Autenticação por Senha (Fixada em pretabebe)
 def verificar_senha():
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
@@ -102,14 +102,13 @@ def verificar_senha():
         return True
 
     st.title("🔒 Acesso Restrito - Gestão Financeira")
-    senha_correta = os.getenv("APP_PASSWORD") or st.secrets.get("APP_PASSWORD", "123456")
     
     with st.form("form_login"):
         senha_digitada = st.text_input("Digite a senha de acesso:", type="password")
         botao_entrar = st.form_submit_button("Entrar")
         
         if botao_entrar:
-            if senha_digitada == senha_correta:
+            if senha_digitada == "pretabebe":
                 st.session_state["autenticado"] = True
                 st.success("Acesso liberado!")
                 st.rerun()
@@ -251,10 +250,8 @@ def carregar_dados_globais():
         
     return df_proj, df_fixos, df_comuns, df_pontuais, df_caixinha, df_prog, df_status
 
-# Carrega todos os dados de uma só vez para máxima performance
 df_proj_all, df_fixos_all, df_comuns_all, df_pontuais_all, df_caixinha_all, df_prog_all, df_status_all = carregar_dados_globais()
 
-# Helpers específicos baseados nos DataFrames globais em cache
 def get_projecao(pessoa, tipo):
     if df_proj_all.empty:
         return pd.DataFrame(columns=['pessoa', 'tipo', 'item', 'mes_ano', 'valor'])
@@ -380,16 +377,13 @@ def calcular_sequencia_financeira():
     saldo_acumulado_anterior = 0.0
 
     for m in TODOS_MESES_SISTEMA:
-        # Receitas
         r_p1 = df_proj_all[(df_proj_all['mes_ano'] == m) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         renda_mes = r_p1 + r_p2
 
-        # Cartões
         c_p1 = df_proj_all[(df_proj_all['mes_ano'] == m) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         c_p2 = df_proj_all[(df_proj_all['mes_ano'] == m) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         
-        # Status de Fatura Fechada
         f1_fechada = False
         f2_fechada = False
         if not df_status_all.empty:
@@ -401,7 +395,6 @@ def calcular_sequencia_financeira():
         add_prog_p1 = 0.0 if f1_fechada else prog_p1
         add_prog_p2 = 0.0 if f2_fechada else prog_p2
 
-        # Pontuais
         p_df = df_pontuais_all[df_pontuais_all['mes_ano'] == m] if not df_pontuais_all.empty else pd.DataFrame()
         pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
         pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
