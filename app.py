@@ -6,23 +6,29 @@ import plotly.express as px
 from sqlalchemy import create_engine, text
 
 # 1. Configuração da Página
-st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
+st.set_page_config(page_title="Gestão Financeira", layout="wide")
 
-# 2. CSS para Otimização Mobile
+# 2. CSS Ultra-Compacto para Telas de Celular (Mobile First)
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 1.2rem !important;
-            padding-bottom: 1.5rem !important;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+            padding-left: 0.3rem !important;
+            padding-right: 0.3rem !important;
         }
         @media (max-width: 640px) {
-            h1 { font-size: 1.4rem !important; }
-            h2 { font-size: 1.2rem !important; }
-            h3 { font-size: 1.0rem !important; }
-            [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
-            .stDataFrame { font-size: 0.85rem; }
+            h1 { font-size: 1.2rem !important; margin-bottom: 0.2rem !important; }
+            h2 { font-size: 1.0rem !important; margin-bottom: 0.2rem !important; }
+            h3 { font-size: 0.9rem !important; margin-bottom: 0.2rem !important; }
+            p, span, label { font-size: 0.8rem !important; }
+            [data-testid="stMetricValue"] { font-size: 0.95rem !important; }
+            [data-testid="stMetricLabel"] { font-size: 0.75rem !important; }
+            .stDataFrame { font-size: 0.75rem !important; }
+            button[data-baseweb="tab"] {
+                padding: 4px 8px !important;
+                font-size: 0.75rem !important;
+            }
         }
     </style>
 """, unsafe_allow_html=True)
@@ -52,7 +58,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão com o Banco Supabase
+# 4. Conexão Otimizada com o Banco Supabase
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL")
@@ -72,11 +78,17 @@ def get_db_engine():
     if "sslmode" not in db_url:
         db_url += "?sslmode=require" if "?" not in db_url else "&sslmode=require"
 
-    return create_engine(db_url, connect_args={"connect_timeout": 10}, pool_pre_ping=True)
+    return create_engine(
+        db_url, 
+        connect_args={"connect_timeout": 5}, 
+        pool_size=5, 
+        max_overflow=10, 
+        pool_pre_ping=True
+    )
 
 engine = get_db_engine()
 
-# 5. Inicialização e Migração das Tabelas no Banco
+# 5. Inicialização e Migração do Banco
 def init_db():
     with engine.begin() as conn:
         conn.execute(text('''
@@ -107,7 +119,6 @@ def init_db():
             );
         '''))
         
-        # MIGRAÇÕES: Garante que as novas colunas existam no banco existente
         try:
             conn.execute(text("ALTER TABLE gastos_comuns ADD COLUMN IF NOT EXISTS pagador TEXT DEFAULT 'Pessoa 1';"))
             conn.execute(text("ALTER TABLE pontuais_dinheiro ADD COLUMN IF NOT EXISTS tipo_debito TEXT DEFAULT 'Diário (Mês Atual)';"))
@@ -138,7 +149,8 @@ ESTRUTURA_RECEITAS = {
     "Pessoa 2": ["Salário Base", "Receita Extra"]
 }
 
-# 7. Funções de Persistência
+# 7. Funções de Persistência com Cache Inteligente
+@st.cache_data(ttl=60)
 def carregar_projecao(pessoa, tipo):
     return pd.read_sql(text("SELECT * FROM projecao WHERE pessoa = :pessoa AND tipo = :tipo"), engine, params={"pessoa": pessoa, "tipo": tipo})
 
@@ -154,7 +166,9 @@ def salvar_projecao(pessoa, tipo, df_editado):
                     ON CONFLICT (pessoa, tipo, item, mes_ano) DO UPDATE SET valor = EXCLUDED.valor;
                 '''
                 conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes, "val": val})
+    st.cache_data.clear()
 
+@st.cache_data(ttl=60)
 def carregar_fixos(pessoa):
     return pd.read_sql(text("SELECT id, item, valor FROM gastos_fixos WHERE pessoa = :pessoa"), engine, params={"pessoa": pessoa})
 
@@ -165,7 +179,9 @@ def salvar_fixos(pessoa, df_editado):
             if str(row['item']).strip():
                 conn.execute(text("INSERT INTO gastos_fixos (pessoa, item, valor) VALUES (:pessoa, :item, :val)"),
                              {"pessoa": pessoa, "item": str(row['item']), "val": float(row['valor'])})
+    st.cache_data.clear()
 
+@st.cache_data(ttl=60)
 def carregar_comuns():
     return pd.read_sql(text("SELECT id, item, valor, pagador FROM gastos_comuns"), engine)
 
@@ -176,7 +192,9 @@ def salvar_comuns(df_editado):
             if str(row['item']).strip():
                 conn.execute(text("INSERT INTO gastos_comuns (item, valor, pagador) VALUES (:item, :val, :pag)"),
                              {"item": str(row['item']), "val": float(row['valor']), "pag": str(row['pagador'])})
+    st.cache_data.clear()
 
+@st.cache_data(ttl=60)
 def carregar_pontuais(mes_ano):
     return pd.read_sql(text("SELECT id, pessoa, descricao, categoria, tipo_debito, valor FROM pontuais_dinheiro WHERE mes_ano = :mes_ano"), engine, params={"mes_ano": mes_ano})
 
@@ -187,7 +205,9 @@ def salvar_pontuais(mes_ano, df_editado):
             if str(row['descricao']).strip():
                 conn.execute(text("INSERT INTO pontuais_dinheiro (mes_ano, pessoa, descricao, categoria, tipo_debito, valor) VALUES (:mes_ano, :p, :desc, :cat, :td, :val)"),
                              {"mes_ano": mes_ano, "p": str(row['pessoa']), "desc": str(row['descricao']), "cat": str(row['categoria']), "td": str(row['tipo_debito']), "val": float(row['valor'])})
+    st.cache_data.clear()
 
+@st.cache_data(ttl=60)
 def carregar_caixinha():
     return pd.read_sql(text("SELECT mes_ano, valor FROM caixinha"), engine)
 
@@ -198,11 +218,12 @@ def salvar_caixinha(df_editado):
             val = float(row['Aporte do Mês (R$)']) if pd.notnull(row['Aporte do Mês (R$)']) else 0.0
             conn.execute(text("INSERT INTO caixinha (mes_ano, valor) VALUES (:mes, :val) ON CONFLICT (mes_ano) DO UPDATE SET valor = EXCLUDED.valor;"),
                          {"mes": mes, "val": val})
+    st.cache_data.clear()
 
-# 8. Cabeçalho e Logout
+# 8. Cabeçalho Compacto
 col_head, col_logout = st.columns([8, 2])
 with col_head:
-    st.title("📊 Gestão Financeira Familiar")
+    st.title("📊 Gestão Financeira")
 with col_logout:
     if st.button("🚪 Sair"):
         st.session_state["autenticado"] = False
@@ -210,15 +231,15 @@ with col_logout:
 
 # 9. Interface Consolidada (3 Abas Principais)
 tab1, tab2, tab3 = st.tabs([
-    "💳 Cartões & Gastos Individuais",
-    "🏠 Contas da Casa & Dinheiro/PIX",
-    "⚖️ Fechamento, PIX de Acerto & Caixinha"
+    "💳 Cartões & Individuais",
+    "🏠 Contas Casa & PIX",
+    "⚖️ Fechamento & Caixinha"
 ])
 
 # --- ABA 1: CARTÕES E GASTOS INDIVIDUAIS ---
 with tab1:
-    st.header("💳 Renda, Cartões e Fixos Próprios")
-    p_sel = st.radio("Selecione a Pessoa:", ["Pessoa 1 (Lucas)", "Pessoa 2 (Marcella)"], horizontal=True)
+    st.header("💳 Renda e Gastos Próprios")
+    p_sel = st.radio("Pessoa:", ["Pessoa 1 (Lucas)", "Pessoa 2 (Marcella)"], horizontal=True)
     pessoa = "Pessoa 1" if "Lucas" in p_sel else "Pessoa 2"
 
     st.subheader(f"💵 Receitas - {pessoa}")
@@ -235,7 +256,7 @@ with tab1:
                                 column_config={m: st.column_config.NumberColumn(m, format="R$ %.2f") for m in MESES_PROJECAO})
     if st.button(f"💾 Salvar Receitas ({pessoa})"):
         salvar_projecao(pessoa, "RECEITA", df_rec_edit)
-        st.success("Receitas salvas!")
+        st.success("Salvo!")
         st.rerun()
 
     st.divider()
@@ -254,7 +275,7 @@ with tab1:
                                  column_config={m: st.column_config.NumberColumn(m, format="R$ %.2f") for m in MESES_PROJECAO})
     if st.button(f"💾 Salvar Cartões ({pessoa})"):
         salvar_projecao(pessoa, "CARTAO", df_cart_edit)
-        st.success("Cartões salvos!")
+        st.success("Salvo!")
         st.rerun()
 
     st.divider()
@@ -264,54 +285,52 @@ with tab1:
                                    column_config={"item": st.column_config.TextColumn("Descrição"), "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f")})
     if st.button(f"💾 Salvar Fixos ({pessoa})"):
         salvar_fixos(pessoa, df_fixos_edit)
-        st.success("Gastos fixos salvos!")
+        st.success("Salvo!")
         st.rerun()
 
 # --- ABA 2: CONTAS DA CASA & DINHEIRO/PIX ---
 with tab2:
-    st.header("🏡 Contas Compartilhadas da Casa & Lançamentos em Dinheiro/PIX")
+    st.header("🏡 Contas da Casa & Dinheiro/PIX")
     
-    st.subheader("🏡 1. Fixos da Casa (Aluguel, Luz, Internet)")
-    st.caption("Cadastre as contas recorrentes e quem é o responsável direto por efetuar o pagamento.")
-    
+    st.subheader("🏡 1. Fixos da Casa")
     df_comuns_edit = st.data_editor(carregar_comuns(), num_rows="dynamic", use_container_width=True, key="comuns_editor",
                                    column_config={
-                                       "item": st.column_config.TextColumn("Descrição da Conta da Casa"),
-                                       "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f"),
-                                       "pagador": st.column_config.SelectboxColumn("Titular do Débito", options=["Pessoa 1", "Pessoa 2"])
+                                       "item": st.column_config.TextColumn("Descrição"),
+                                       "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f"),
+                                       "pagador": st.column_config.SelectboxColumn("Titular", options=["Pessoa 1", "Pessoa 2"])
                                    })
     if st.button("💾 Salvar Contas da Casa"):
         salvar_comuns(df_comuns_edit)
-        st.success("Contas da casa salvas!")
+        st.success("Salvo!")
         st.rerun()
 
     st.divider()
 
-    st.subheader("💸 2. Gastos Pontuais & Compromissos em Dinheiro/PIX")
+    st.subheader("💸 2. Gastos Pontuais Dinheiro/PIX")
     
-    with st.expander("⚡ Formulário de Lançamento Rápido", expanded=False):
+    with st.expander("⚡ Lançamento Rápido", expanded=False):
         with st.form("form_rapido"):
             c_p, c_m, c_td, c_v = st.columns(4)
             with c_p: p_r = st.selectbox("Quem pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
             with c_m: m_r = st.selectbox("Mês", MESES_PROJECAO)
-            with c_td: td_r = st.selectbox("Tipo de Débito", ["Diário (Mês Atual)", "Pré-computado (Próximo Salário)"])
+            with c_td: td_r = st.selectbox("Débito", ["Diário (Mês Atual)", "Pré-computado (Próximo Salário)"])
             with c_v: v_r = st.number_input("Valor (R$)", min_value=0.0, step=10.0)
             
             c_cat, c_desc = st.columns([2, 4])
             with c_cat: cat_r = st.selectbox("Categoria", ["Mercado", "Padaria", "Transporte", "Lazer", "Farmácia", "Outros"])
-            with c_desc: desc_r = st.text_input("Descrição do Gasto")
+            with c_desc: desc_r = st.text_input("Descrição")
             
-            if st.form_submit_button("➕ Adicionar Gasto"):
+            if st.form_submit_button("➕ Adicionar"):
                 if desc_r.strip():
                     df_a = carregar_pontuais(m_r)
                     nova_l = pd.DataFrame([{"pessoa": p_r, "descricao": desc_r, "categoria": cat_r, "tipo_debito": td_r, "valor": v_r}])
                     salvar_pontuais(m_r, pd.concat([df_a, nova_l], ignore_index=True))
-                    st.success("Gasto registrado!")
+                    st.success("Adicionado!")
                     st.rerun()
 
     col_m_p, col_b = st.columns([2, 3])
     with col_m_p: mes_p = st.selectbox("Mês para Edição:", MESES_PROJECAO, index=0)
-    with col_b: busca_t = st.text_input("🔍 Buscar gasto:")
+    with col_b: busca_t = st.text_input("🔍 Buscar:")
 
     df_p_db = carregar_pontuais(mes_p)
     if busca_t: df_p_db = df_p_db[df_p_db['descricao'].str.contains(busca_t, case=False, na=False)]
@@ -321,19 +340,19 @@ with tab2:
                                    "pessoa": st.column_config.SelectboxColumn("Pagador", options=["Pessoa 1", "Pessoa 2", "Comum / Casa"]),
                                    "descricao": st.column_config.TextColumn("Descrição"),
                                    "categoria": st.column_config.SelectboxColumn("Categoria", options=["Mercado", "Padaria", "Transporte", "Lazer", "Farmácia", "Outros"]),
-                                   "tipo_debito": st.column_config.SelectboxColumn("Natureza do Gasto", options=["Diário (Mês Atual)", "Pré-computado (Próximo Salário)"]),
+                                   "tipo_debito": st.column_config.SelectboxColumn("Natureza", options=["Diário (Mês Atual)", "Pré-computado (Próximo Salário)"]),
                                    "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f")
                                })
     if st.button("💾 Salvar Gastos Pontuais"):
         salvar_pontuais(mes_p, df_p_edit)
-        st.success("Gastos salvos!")
+        st.success("Salvo!")
         st.rerun()
 
 # --- ABA 3: FECHAMENTO, PIX DE ACERTO & CAIXINHA ---
 with tab3:
-    st.header("⚖️ Fechamento, PIX de Acerto & Caixinha Acumulativa")
+    st.header("⚖️ Fechamento & Caixinha")
     
-    st.subheader("📦 Caixinha de Reserva da Família")
+    st.subheader("📦 Caixinha de Reserva")
     df_caix_db = carregar_caixinha()
     rows_caix = []
     for m in MESES_PROJECAO:
@@ -343,9 +362,9 @@ with tab3:
     df_caix_edit = st.data_editor(pd.DataFrame(rows_caix), num_rows="fixed", use_container_width=True, key="caix_editor",
                                   column_config={"Mês": st.column_config.TextColumn("Mês", disabled=True),
                                                 "Aporte do Mês (R$)": st.column_config.NumberColumn(format="R$ %.2f")})
-    if st.button("💾 Salvar Aportes da Caixinha"):
+    if st.button("💾 Salvar Caixinha"):
         salvar_caixinha(df_caix_edit)
-        st.success("Caixinha atualizada!")
+        st.success("Salvo!")
         st.rerun()
 
     acum_caix = 0.0
@@ -421,59 +440,59 @@ with tab3:
 
     st.divider()
 
-    st.subheader("📌 Fechamento e PIX de Acerto do Mês")
-    mes_f = st.selectbox("Selecione o mês para exame detalhado:", MESES_PROJECAO, index=0)
+    st.subheader("📌 PIX de Acerto do Mês")
+    mes_f = st.selectbox("Mês:", MESES_PROJECAO, index=0)
     tf = totais_f[mes_f]
 
     dif = tf["diferenca_acerto"]
     if dif > 0:
-        st.info(f"🔄 **PIX de Acerto de Contas ({mes_f}):** Marcella (Pessoa 2) deve transferir **R$ {abs(dif):,.2f}** para Lucas (Pessoa 1) para igualar as despesas da casa.")
+        st.info(f"🔄 **PIX de Acerto ({mes_f}):** Marcella (P2) transfere **R$ {abs(dif):,.2f}** para Lucas (P1)")
     elif dif < 0:
-        st.info(f"🔄 **PIX de Acerto de Contas ({mes_f}):** Lucas (Pessoa 1) deve transferir **R$ {abs(dif):,.2f}** para Marcella (Pessoa 2) para igualar as despesas da casa.")
+        st.info(f"🔄 **PIX de Acerto ({mes_f}):** Lucas (P1) transfere **R$ {abs(dif):,.2f}** para Marcella (P2)")
     else:
-        st.success(f"⚖️ **Contas Equilibradas ({mes_f}):** Ambos pagaram partes iguais das despesas da casa!")
+        st.success(f"⚖️ **Contas Equilibradas ({mes_f})**")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Desembolso Pessoa 1", f"R$ {tf['desembolso_p1']:,.2f}")
-    c2.metric("Desembolso Pessoa 2", f"R$ {tf['desembolso_p2']:,.2f}")
-    c3.metric("Total Contas da Casa", f"R$ {tf['desp_casa_total']:,.2f}")
+    c1.metric("Desembolso P1", f"R$ {tf['desembolso_p1']:,.2f}")
+    c2.metric("Desembolso P2", f"R$ {tf['desembolso_p2']:,.2f}")
+    c3.metric("Contas da Casa", f"R$ {tf['desp_casa_total']:,.2f}")
     c4.metric("Aporte Caixinha", f"R$ {tf['caix_m']:,.2f}")
 
     st.divider()
 
-    st.markdown(f"### 📈 Resumo do Saldo da Família ({mes_f})")
+    st.markdown(f"### 📈 Saldo Família ({mes_f})")
     mc1, mc2, mc3 = st.columns(3)
-    mc1.metric("Renda Familiar", f"R$ {tf['rec_fam']:,.2f}")
-    mc2.metric("Saldo Mês Anterior (Rollover)", f"R$ {tf['saldo_anterior_fam']:,.2f}")
+    mc1.metric("Renda Família", f"R$ {tf['rec_fam']:,.2f}")
+    mc2.metric("Saldo Mês Anterior", f"R$ {tf['saldo_anterior_fam']:,.2f}")
     
     cor_delta = "normal" if tf['sobra_liquida_fam'] >= 0 else "inverse"
-    mc3.metric("Sobra Líquida Acumulada", f"R$ {tf['sobra_liquida_fam']:,.2f}", delta=f"{tf['sobra_liquida_fam']:,.2f}", delta_color=cor_delta)
+    mc3.metric("Sobra Líquida", f"R$ {tf['sobra_liquida_fam']:,.2f}", delta=f"{tf['sobra_liquida_fam']:,.2f}", delta_color=cor_delta)
 
     st.divider()
 
-    st.subheader("📊 Dashboards da Família")
+    st.subheader("📊 Dashboards")
     g1, g2 = st.columns(2)
     with g1:
         fig_p = px.pie(names=['Gasto P1', 'Gasto P2', 'Caixinha'], 
                        values=[tf['desembolso_p1'], tf['desembolso_p2'], tf['caix_m']], 
-                       title=f"Proporção de Desembolso ({mes_f})", hole=0.4)
+                       title=f"Desembolso ({mes_f})", hole=0.4)
         st.plotly_chart(fig_p, use_container_width=True)
     with g2:
-        df_cx = pd.DataFrame([{"Mês": m, "Saldo Caixinha": totais_f[m]["caix_a"]} for m in MESES_PROJECAO])
-        fig_l = px.line(df_cx, x="Mês", y="Saldo Caixinha", title="Evolução da Caixinha (R$)", markers=True)
+        df_cx = pd.DataFrame([{"Mês": m, "Caixinha": totais_f[m]["caix_a"]} for m in MESES_PROJECAO])
+        fig_l = px.line(df_cx, x="Mês", y="Caixinha", title="Evolução Caixinha (R$)", markers=True)
         fig_l.update_traces(fill='tozeroy')
         st.plotly_chart(fig_l, use_container_width=True)
 
     st.divider()
 
-    st.subheader("📅 Tabela de Projeção Evolutiva (2026 - 2030)")
+    st.subheader("📅 Projeção Evolutiva (2026 - 2030)")
     
-    r_ant = {"Métrica": "1. Saldo do Mês Anterior"}
+    r_ant = {"Métrica": "1. Saldo Mês Anterior"}
     r_rec = {"Métrica": "2. Renda Total Família"}
-    r_dp1 = {"Métrica": "3. Desembolso Pessoa 1"}
-    r_dp2 = {"Métrica": "4. Desembolso Pessoa 2"}
-    r_caix_m = {"Métrica": "5. Aporte Caixinha (Mês)"}
-    r_desp_t = {"Métrica": "6. Despesa Total Família"}
+    r_dp1 = {"Métrica": "3. Desembolso P1"}
+    r_dp2 = {"Métrica": "4. Desembolso P2"}
+    r_caix_m = {"Métrica": "5. Aporte Caixinha"}
+    r_desp_t = {"Métrica": "6. Despesa Total"}
     r_sobra = {"Métrica": "7. Sobra Final Acumulada"}
     r_caix_a = {"Métrica": "8. Caixinha Acumulada"}
 
@@ -496,8 +515,8 @@ with tab3:
         df_final.to_excel(writer, sheet_name='Projecao_Financeira', index=False)
     
     st.download_button(
-        label="📥 Baixar Projeção Completa em Excel (.xlsx)",
+        label="📥 Baixar Excel (.xlsx)",
         data=output.getvalue(),
-        file_name="Projecao_Financeira_Familiar.xlsx",
+        file_name="Projecao_Financeira.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
