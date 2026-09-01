@@ -1,32 +1,36 @@
 import os
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 from sqlalchemy import create_engine, text
 
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Otimizado para Mobile e Destaques Visuais
+# 2. Injeção de CSS Otimizado para Layout Fluido e Cards
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 1.2rem !important;
+            padding-top: 1.0rem !important;
             padding-bottom: 1.5rem !important;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            padding-left: 1.0rem !important;
+            padding-right: 1.0rem !important;
         }
         .stMetric {
             background-color: #1e293b;
-            padding: 12px;
+            padding: 10px 14px;
             border-radius: 8px;
             border: 1px solid #334155;
         }
+        [data-testid="stMetricValue"] {
+            font-size: 1.3rem !important;
+        }
         @media (max-width: 640px) {
-            h1 { font-size: 1.5rem !important; }
-            h2 { font-size: 1.2rem !important; }
+            h1 { font-size: 1.4rem !important; }
+            h2 { font-size: 1.1rem !important; }
             h3 { font-size: 1.0rem !important; }
-            [data-testid="stMetricValue"] { font-size: 1.2rem !important; }
-            .stDataFrame { font-size: 0.85rem; }
+            [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
+            .stDataFrame { font-size: 0.8rem; }
         }
     </style>
 """, unsafe_allow_html=True)
@@ -58,7 +62,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão Otimizada com o Banco de Dados (Engine Pool)
+# 4. Conexão Otimizada com o Banco de Dados
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -143,13 +147,21 @@ def init_db():
 
 init_db()
 
-# 6. Constantes e Estruturas
-MESES_PROJECAO = [
-    "08.2026", "09.2026", "10.2026", "11.2026", "12.2026",
-    "01.2027", "02.2027", "03.2027", "04.2027", "05.2027", "06.2027", "07.2027",
-    "08.2027", "09.2027", "10.2027", "11.2027", "12.2027",
-    "01.2028", "02.2028", "03.2028", "04.2028", "05.2028", "06.2028", "07.2028"
-]
+# 6. GERADOR DINÂMICO DE MESES E ESTRUTURAS
+def gerar_linha_tempo_dinamica(mes_inicio_str="08.2026", quantidade_meses=36):
+    m_init, y_init = map(int, mes_inicio_str.split("."))
+    meses = []
+    curr_m, curr_y = m_init, y_init
+    for _ in range(quantidade_meses):
+        meses.append(f"{curr_m:02d}.{curr_y}")
+        curr_m += 1
+        if curr_m > 12:
+            curr_m = 1
+            curr_y += 1
+    return meses
+
+# Linha do tempo total do sistema (A partir da data base do histórico)
+TODOS_MESES_SISTEMA = gerar_linha_tempo_dinamica("08.2026", 48)
 
 ESTRUTURA_CARTÕES = {
     "Pessoa 1": ["C6 Carbon", "Nubank", "Santander"],
@@ -281,38 +293,7 @@ def salvar_dinheiro_provisionado(pessoa, df_editado):
                 query = "INSERT INTO dinheiro_provisionado (pessoa, descricao, valor) VALUES (:pessoa, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "desc": str(row['descricao']), "val": float(row['valor'])})
 
-# 9. Cabeçalho e Botão Unificado de Salvamento
-col_head, col_save_all, col_logout = st.columns([6, 3, 1])
-with col_head:
-    st.title("📊 Painel Financeiro Integrado")
-
-with col_save_all:
-    if st.button("💾 SALVAR TODAS AS ALTERAÇÕES", type="primary", use_container_width=True):
-        if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
-        if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
-        if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"])
-        if "prog_p1_df" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1_df"])
-        if "prov_p1_df" in st.session_state: salvar_dinheiro_provisionado("Pessoa 1", st.session_state["prov_p1_df"])
-
-        if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"])
-        if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"])
-        if "fix_p2_df" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2_df"])
-        if "prog_p2_df" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2_df"])
-        if "prov_p2_df" in st.session_state: salvar_dinheiro_provisionado("Pessoa 2", st.session_state["prov_p2_df"])
-
-        if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"])
-        if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"])
-        
-        st.cache_data.clear()
-        st.success("Tudo foi salvo com sucesso!")
-        st.rerun()
-
-with col_logout:
-    if st.button("🚪 Sair"):
-        st.session_state["autenticado"] = False
-        st.rerun()
-
-# 10. LÓGICA DE CÁLCULO DE CAIXA E ACÚMULO SEQUENCIAL
+# 9. LÓGICA DE CÁLCULO DE CAIXA COMPLETA (DESDE A ORIGEM)
 def calcular_sequencia_financeira():
     rec_all_db = carregar_todas_projecoes("RECEITA")
     cart_all_db = carregar_todas_projecoes("CARTAO")
@@ -329,7 +310,7 @@ def calcular_sequencia_financeira():
     dados_meses = {}
     saldo_acumulado_anterior = 0.0
 
-    for m in MESES_PROJECAO:
+    for m in TODOS_MESES_SISTEMA:
         renda_mes = rec_all_db[rec_all_db['mes_ano'] == m]['valor'].sum() if not rec_all_db.empty else 0.0
         
         c_val = cart_all_db[cart_all_db['mes_ano'] == m]['valor'].sum() if not cart_all_db.empty else 0.0
@@ -360,32 +341,68 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# --- ARQUIVAMENTO E SELEÇÃO DO MÊS DE FOCO ---
-col_tit, col_sel, col_visao = st.columns([5, 3, 2])
-with col_tit:
-    st.markdown("### ⚡ Situação Atual do Mês")
-with col_sel:
-    mes_atual = st.selectbox("Selecione o Mês em Destaque:", MESES_PROJECAO, index=0)
-with col_visao:
-    modo_exibicao = st.radio("Janela Temporal:", ["Próximos 12 meses", "Todos os 24 meses"], index=0)
+# 10. CABEÇALHO E CONTROLE DE NAVEGAÇÃO TEMPORAL
+col_head, col_save_all, col_logout = st.columns([6, 4, 1])
+with col_head:
+    st.title("📊 Painel Financeiro Integrado")
 
-idx_foco = MESES_PROJECAO.index(mes_atual)
-meses_visiveis = MESES_PROJECAO[idx_foco:idx_foco+12] if modo_exibicao == "Próximos 12 meses" else MESES_PROJECAO[idx_foco:]
+with col_save_all:
+    if st.button("💾 SALVAR TODAS AS ALTERAÇÕES", type="primary", use_container_width=True):
+        if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
+        if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
+        if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"])
+        if "prog_p1_df" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1_df"])
+        if "prov_p1_df" in st.session_state: salvar_dinheiro_provisionado("Pessoa 1", st.session_state["prov_p1_df"])
+
+        if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"])
+        if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"])
+        if "fix_p2_df" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2_df"])
+        if "prog_p2_df" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2_df"])
+        if "prov_p2_df" in st.session_state: salvar_dinheiro_provisionado("Pessoa 2", st.session_state["prov_p2_df"])
+
+        if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"])
+        if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"])
+        
+        st.cache_data.clear()
+        st.success("Tudo foi salvo com sucesso!")
+        st.rerun()
+
+with col_logout:
+    if st.button("🚪 Sair"):
+        st.session_state["autenticado"] = False
+        st.rerun()
+
+# CONTROLES DO MÊS EM DESTAQUE (JANELA DESLIZANTE QUE ARQUIVA O PASSADO)
+c_sel1, c_sel2 = st.columns([6, 4])
+with c_sel1:
+    mes_atual = st.selectbox("📅 Selecione o Mês Atual de Trabalho (Arquiva Anteriores):", TODOS_MESES_SISTEMA[:24], index=0)
+with c_sel2:
+    modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
+
+idx_foco = TODOS_MESES_SISTEMA.index(mes_atual)
+qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
+
+# Janela visual das tabelas COMEÇA estritamente no mês atual selecionado
+meses_visiveis = TODOS_MESES_SISTEMA[idx_foco:idx_foco + qtd_meses]
 st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros[mes_atual]
 
-k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("Saldo Inicial Em Conta", f"R$ {d_foco['saldo_anterior']:,.2f}")
-k2.metric("Renda do Mês", f"R$ {d_foco['renda_mes']:,.2f}")
-k3.metric("Saídas Totais", f"R$ {d_foco['saidas_mes']:,.2f}")
-k4.metric("Aporte Caixinha", f"R$ {d_foco['caixinha_mes']:,.2f}")
+# CARDS SUPERIORES
+st.markdown(f"#### ⚡ Resumo Financeiro - {mes_atual}")
+k1, k2, k3 = st.columns(3)
+k1.metric("1. Saldo Inicial em Conta (Acumulado Passado)", f"R$ {d_foco['saldo_anterior']:,.2f}")
+k2.metric("2. Renda do Mês", f"R$ {d_foco['renda_mes']:,.2f}")
+k3.metric("3. Saídas Totais (Cartão/Fixos/PIX)", f"R$ {d_foco['saidas_mes']:,.2f}")
+
+k4, k5 = st.columns(2)
+k4.metric("4. Aporte Caixinha", f"R$ {d_foco['caixinha_mes']:,.2f}")
 
 s_final = d_foco['saldo_acumulado_final']
 if s_final >= 0:
-    k5.metric("Saldo Acumulado Final", f"R$ {s_final:,.2f}", delta="Positivo", delta_color="normal")
+    k5.metric("5. Saldo Acumulado Final (Avança p/ Próximo Mês)", f"R$ {s_final:,.2f}", delta="Positivo", delta_color="normal")
 else:
-    k5.metric("Saldo Acumulado Final", f"R$ {s_final:,.2f}", delta="Déficit", delta_color="inverse")
+    k5.metric("5. Saldo Acumulado Final (Avança p/ Próximo Mês)", f"R$ {s_final:,.2f}", delta="Déficit", delta_color="inverse")
 
 st.divider()
 
@@ -497,7 +514,7 @@ with tab_pontuais:
     st.header("💸 Gastos Pontuais em Dinheiro/PIX (Imprevistos do Mês)")
     col_sel_p, _ = st.columns([2, 3])
     with col_sel_p:
-        mes_pontual = st.selectbox("Selecione o Mês:", MESES_PROJECAO, index=idx_foco)
+        mes_pontual = st.selectbox("Selecione o Mês:", TODOS_MESES_SISTEMA[:24], index=idx_foco)
         
     df_pontuais_db = carregar_pontuais(mes_pontual)
     
