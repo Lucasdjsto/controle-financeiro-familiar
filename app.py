@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Dinâmico (Flexbox Responsivo)
+# 2. Injeção de CSS Dinâmico (Flexbox Responsivo e Botões)
 st.markdown("""
     <style>
         .block-container {
@@ -140,7 +140,7 @@ def get_db_engine():
 
 engine = get_db_engine()
 
-# 5. Inicialização das Tabelas no Banco (com suporte a pagador nas comuns)
+# 5. Inicialização das Tabelas no Banco
 def init_db():
     with engine.begin() as conn:
         conn.execute(text('''
@@ -247,13 +247,8 @@ def carregar_comuns():
     return df
 
 @st.cache_data(ttl=600)
-def carregar_pontuais(mes_ano):
-    query = "SELECT id, pessoa, descricao, categoria, valor FROM pontuais_dinheiro WHERE mes_ano = :mes_ano"
-    return pd.read_sql(text(query), engine, params={"mes_ano": mes_ano})
-
-@st.cache_data(ttl=600)
 def carregar_todos_pontuais():
-    query = "SELECT mes_ano, pessoa, valor FROM pontuais_dinheiro"
+    query = "SELECT id, mes_ano, pessoa, descricao, categoria, valor FROM pontuais_dinheiro"
     return pd.read_sql(text(query), engine)
 
 @st.cache_data(ttl=600)
@@ -298,19 +293,25 @@ def salvar_comuns(df_editado):
                 query = "INSERT INTO gastos_comuns (item, valor, pagador) VALUES (:item, :val, :pag)"
                 conn.execute(text(query), {"item": str(row['item']), "val": float(row['valor']), "pag": pag})
 
-def salvar_pontuais(mes_ano, df_editado):
+def inserir_gasto_rapido(mes_ano, pessoa, descricao, categoria, valor):
     with engine.begin() as conn:
-        conn.execute(text("DELETE FROM pontuais_dinheiro WHERE mes_ano = :mes_ano"), {"mes_ano": mes_ano})
-        for _, row in df_editado.iterrows():
-            if str(row['descricao']).strip():
-                query = "INSERT INTO pontuais_dinheiro (mes_ano, pessoa, descricao, categoria, valor) VALUES (:mes_ano, :pessoa, :desc, :cat, :val)"
-                conn.execute(text(query), {
-                    "mes_ano": mes_ano, 
-                    "pessoa": str(row['pessoa']), 
-                    "desc": str(row['descricao']), 
-                    "cat": str(row['categoria']), 
-                    "val": float(row['valor'])
-                })
+        query = '''
+            INSERT INTO pontuais_dinheiro (mes_ano, pessoa, descricao, categoria, valor)
+            VALUES (:mes_ano, :pessoa, :descricao, :categoria, :valor)
+        '''
+        conn.execute(text(query), {
+            "mes_ano": mes_ano,
+            "pessoa": pessoa,
+            "descricao": descricao,
+            "categoria": categoria,
+            "valor": float(valor)
+        })
+    st.cache_data.clear()
+
+def deletar_gasto_pontual(gasto_id):
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM pontuais_dinheiro WHERE id = :id"), {"id": gasto_id})
+    st.cache_data.clear()
 
 def salvar_caixinha(df_editado):
     with engine.begin() as conn:
@@ -333,7 +334,32 @@ def salvar_programado_cartao(pessoa, df_editado):
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": str(row['cartao']), "desc": str(row['descricao']), "val": float(row['valor'])})
 
-# 9. LÓGICA DE CÁLCULO DE CAIXA INDIVIDUAL E CONSOLIDADA
+# 9. DIÁLOGO POP-UP (REGISTRO RÁPIDO DE GASTO EM DINHEIRO/PIX)
+@st.dialog("➕ Registrar Novo Gasto Rápido (PIX / Dinheiro)")
+def modal_gasto_rapido(mes_default):
+    with st.form("form_gasto_rapido", clear_on_submit=True):
+        desc = st.text_input("Descrição (ex: Barbeiro, Feira, Farmácia)", placeholder="Digite a descrição...")
+        val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
+        
+        col_p, col_c = st.columns(2)
+        with col_p:
+            pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
+        with col_c:
+            cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
+            
+        mes_target = st.selectbox("Mês de Referência", TODOS_MESES_SISTEMA[:24], index=TODOS_MESES_SISTEMA.index(mes_default))
+        
+        btn_salvar = st.form_submit_button("💾 Salvar Gasto", type="primary", use_container_width=True)
+        
+        if btn_salvar:
+            if not desc.strip():
+                st.error("Por favor, preencha a descrição do gasto.")
+            else:
+                inserir_gasto_rapido(mes_target, pessoa, desc, cat, val)
+                st.success("Gasto registrado com sucesso!")
+                st.rerun()
+
+# 10. LÓGICA DE CÁLCULO DE CAIXA INDIVIDUAL E CONSOLIDADA
 def calcular_sequencia_financeira():
     rec_all_db = carregar_todas_projecoes("RECEITA")
     cart_all_db = carregar_todas_projecoes("CARTAO")
@@ -347,7 +373,6 @@ def calcular_sequencia_financeira():
     df_comuns = carregar_comuns()
     comuns_val_total = df_comuns['valor'].sum() if not df_comuns.empty else 0.0
     
-    # Atribuição das despesas comuns conforme o Pagador
     comuns_p1 = df_comuns[df_comuns['pagador'] == 'Pessoa 1']['valor'].sum() if not df_comuns.empty else 0.0
     comuns_p2 = df_comuns[df_comuns['pagador'] == 'Pessoa 2']['valor'].sum() if not df_comuns.empty else 0.0
     comuns_div = df_comuns[df_comuns['pagador'] == 'Dividido (50/50)']['valor'].sum() if not df_comuns.empty else 0.0
@@ -361,23 +386,19 @@ def calcular_sequencia_financeira():
     saldo_acumulado_anterior = 0.0
 
     for m in TODOS_MESES_SISTEMA:
-        # Receitas Individuais
         r_p1 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 1')]['valor'].sum() if not rec_all_db.empty else 0.0
         r_p2 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 2')]['valor'].sum() if not rec_all_db.empty else 0.0
         renda_mes = r_p1 + r_p2
 
-        # Cartões Individuais
         c_p1 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 1')]['valor'].sum() if not cart_all_db.empty else 0.0
         c_p2 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 2')]['valor'].sum() if not cart_all_db.empty else 0.0
         
-        # Pontuais
         p_df = todos_pontuais_df[todos_pontuais_df['mes_ano'] == m] if not todos_pontuais_df.empty else pd.DataFrame()
         pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].sum() if not p_df.empty else 0.0
         pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].sum() if not p_df.empty else 0.0
         pont_comum = p_df[p_df['pessoa'] == 'Comum / Casa']['valor'].sum() if not p_df.empty else 0.0
         pontual_mes = pont_p1 + pont_p2 + pont_comum
 
-        # Total Exclusivo por Pessoa (Considerando a atribuição da Despesa Comum)
         gasto_exclusivo_p1 = (c_p1 + prog_cart_p1) + fix_p1 + pont_p1 + comuns_p1 + (comuns_div / 2)
         gasto_exclusivo_p2 = (c_p2 + prog_cart_p2) + fix_p2 + pont_p2 + comuns_p2 + (comuns_div / 2)
 
@@ -407,10 +428,15 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO COM BOTÃO REDIMENSIONADO E ALINHADO
-col_head, col_save_btn, col_logout_btn = st.columns([7, 2.5, 1.5])
+# 11. CABEÇALHO COM BOTÃO DE SALVAMENTO E GASTO RÁPIDO
+col_head, col_quick, col_save_btn, col_logout_btn = st.columns([5, 2.5, 2.5, 1.2])
 with col_head:
     st.title("📊 Painel Financeiro Integrado")
+
+with col_quick:
+    st.write("")
+    if st.button("➕ Gasto Rápido (PIX)", type="secondary", use_container_width=True):
+        modal_gasto_rapido(st.session_state.get("mes_atual_sel", "08.2026"))
 
 with col_save_btn:
     st.write("")
@@ -442,6 +468,7 @@ with col_logout_btn:
 c_sel1, c_sel2 = st.columns([6, 4])
 with c_sel1:
     mes_atual = st.selectbox("📅 Selecione o Mês Atual de Trabalho (Arquiva Anteriores):", TODOS_MESES_SISTEMA[:24], index=0)
+    st.session_state["mes_atual_sel"] = mes_atual
 with c_sel2:
     modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
 
@@ -453,7 +480,7 @@ st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros[mes_atual]
 
-# PAINEL RESUMO MENSAL COM DETALHAMENTO DE PESSOA 1 E PESSOA 2
+# PAINEL RESUMO MENSAL
 st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
 
 s_final = d_foco['saldo_acumulado_final']
@@ -507,12 +534,11 @@ st.markdown(f"""
 
 st.divider()
 
-# 11. Interface Principal (Abas)
-tab_p1, tab_p2, tab_comuns, tab_pontuais, tab_consolidado = st.tabs([
+# 12. Interface Principal (Abas Unificadas)
+tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
     "👤 Pessoa 1 (Lucas)", 
     "👤 Pessoa 2 (Marcella)", 
     "🏡 Despesas Comuns (Casa/Aluguel)",
-    "💸 Gastos Pontuais (Dinheiro/PIX)",
     "🏠 Visão Consolidada & Caixinha"
 ])
 
@@ -580,6 +606,24 @@ def renderizar_pessoa(pessoa, p_code):
     )
     st.session_state[f"fix_{p_code}_df"] = df_fixos_edit
 
+    st.divider()
+
+    st.subheader("💸 5. Extrato de Gastos Esporádicos (PIX / Dinheiro)")
+    todos_pontuais = carregar_todos_pontuais()
+    pontuais_p = todos_pontuais[(todos_pontuais['pessoa'] == pessoa) & (todos_pontuais['mes_ano'] == mes_atual)]
+    
+    if not pontuais_p.empty:
+        for _, g in pontuais_p.iterrows():
+            c_g1, c_g2, c_g3, c_g4 = st.columns([4, 3, 3, 1])
+            c_g1.write(f"**{g['descricao']}**")
+            c_g2.write(f"🏷️ {g['categoria']}")
+            c_g3.write(f"**R$ {g['valor']:,.2f}**")
+            if c_g4.button("🗑️", key=f"del_{g['id']}"):
+                deletar_gasto_pontual(g['id'])
+                st.rerun()
+    else:
+        st.info("Nenhum gasto em PIX/dinheiro registrado para este mês.")
+
 with tab_p1:
     renderizar_pessoa("Pessoa 1", "p1")
 
@@ -598,29 +642,6 @@ with tab_comuns:
         }
     )
     st.session_state["comuns_df"] = df_comuns_edit
-
-with tab_pontuais:
-    st.header("💸 Gastos Pontuais e PIX do Mês (Central Unificada)")
-    col_sel_p, _ = st.columns([2, 3])
-    with col_sel_p:
-        mes_pontual = st.selectbox("Selecione o Mês:", TODOS_MESES_SISTEMA[:24], index=idx_foco)
-        
-    df_pontuais_db = carregar_pontuais(mes_pontual)
-    
-    df_pontuais_edit = st.data_editor(
-        df_pontuais_db, num_rows="dynamic", use_container_width=True, key="pontuais_editor",
-        column_config={
-            "pessoa": st.column_config.SelectboxColumn("Origem/Pessoa", options=["Pessoa 1", "Pessoa 2", "Comum / Casa"]),
-            "descricao": st.column_config.TextColumn("Descrição do Gasto / PIX"),
-            "categoria": st.column_config.SelectboxColumn("Categoria", options=["Barbeiro / Estética", "Feira / Mercado", "Transporte", "Lazer", "Farmácia", "Outros"]),
-            "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0)
-        }
-    )
-    if st.button("💾 Salvar Gastos Pontuais do Mês"):
-        salvar_pontuais(mes_pontual, df_pontuais_edit)
-        st.cache_data.clear()
-        st.success(f"Gastos pontuais de {mes_pontual} salvos com sucesso!")
-        st.rerun()
 
 with tab_consolidado:
     st.header("🏠 Visão Consolidada, Caixinha & Totais")
