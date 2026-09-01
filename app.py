@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Dinâmico (Flexbox Responsivo para PC e Mobile)
+# 2. Injeção de CSS Dinâmico (Flexbox Responsivo e Botão Compacto)
 st.markdown("""
     <style>
         .block-container {
@@ -21,57 +21,73 @@ st.markdown("""
             flex-wrap: wrap;
             gap: 12px;
             width: 100%;
-            margin-bottom: 1rem;
+            margin-bottom: 0.8rem;
         }
         
         .metric-card {
             background-color: #1e293b;
             border: 1px solid #334155;
             border-radius: 10px;
-            padding: 14px;
+            padding: 12px 14px;
             flex: 1 1 calc(20% - 12px);
-            min-width: 180px;
+            min-width: 170px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .metric-card-sub {
+            background-color: #0f172a;
+            border: 1px dashed #475569;
+            border-radius: 10px;
+            padding: 10px 12px;
+            flex: 1 1 calc(25% - 12px);
+            min-width: 160px;
         }
         
         .metric-label {
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             color: #94a3b8;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             font-weight: 500;
         }
         
         .metric-value {
-            font-size: 1.35rem;
+            font-size: 1.25rem;
             font-weight: 700;
             color: #f8fafc;
         }
         
         .delta-positive {
             color: #4ade80;
-            font-size: 0.8rem;
-            margin-top: 4px;
+            font-size: 0.78rem;
+            margin-top: 3px;
             font-weight: 600;
         }
         
         .delta-negative {
             color: #f87171;
-            font-size: 0.8rem;
-            margin-top: 4px;
+            font-size: 0.78rem;
+            margin-top: 3px;
             font-weight: 600;
         }
 
+        /* Ajuste Fino de Botão de Salvamento no PC */
+        .stButton > button {
+            border-radius: 8px;
+            font-weight: 600;
+            padding: 6px 16px;
+        }
+
         @media (max-width: 1024px) {
-            .metric-card {
+            .metric-card, .metric-card-sub {
                 flex: 1 1 calc(33.33% - 12px);
             }
         }
         @media (max-width: 640px) {
-            .metric-card {
+            .metric-card, .metric-card-sub {
                 flex: 1 1 100%;
             }
             .metric-value {
-                font-size: 1.2rem;
+                font-size: 1.15rem;
             }
         }
     </style>
@@ -206,7 +222,7 @@ ESTRUTURA_RECEITAS = {
     "Pessoa 2": ["Salário Base", "Receita Extra"]
 }
 
-# 7. Funções de Leitura com Cache Inteligente (@st.cache_data)
+# 7. Funções de Leitura com Cache Inteligente
 @st.cache_data(ttl=600)
 def carregar_projecao(pessoa, tipo):
     query = "SELECT * FROM projecao WHERE pessoa = :pessoa AND tipo = :tipo"
@@ -313,7 +329,7 @@ def salvar_programado_cartao(pessoa, df_editado):
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": str(row['cartao']), "desc": str(row['descricao']), "val": float(row['valor'])})
 
-# 9. LÓGICA DE CÁLCULO DE CAIXA UNIFICADA
+# 9. LÓGICA DE CÁLCULO DE CAIXA INDIVIDUAL E CONSOLIDADA
 def calcular_sequencia_financeira():
     rec_all_db = carregar_todas_projecoes("RECEITA")
     cart_all_db = carregar_todas_projecoes("CARTAO")
@@ -321,7 +337,10 @@ def calcular_sequencia_financeira():
     prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].sum()
     prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].sum()
     
-    tot_fixos = carregar_fixos("Pessoa 1")['valor'].sum() + carregar_fixos("Pessoa 2")['valor'].sum() + carregar_comuns()['valor'].sum()
+    fix_p1 = carregar_fixos("Pessoa 1")['valor'].sum()
+    fix_p2 = carregar_fixos("Pessoa 2")['valor'].sum()
+    comuns_val = carregar_comuns()['valor'].sum()
+    tot_fixos = fix_p1 + fix_p2 + comuns_val
     
     caixinha_df = carregar_caixinha()
     todos_pontuais_df = carregar_todos_pontuais()
@@ -330,17 +349,29 @@ def calcular_sequencia_financeira():
     saldo_acumulado_anterior = 0.0
 
     for m in TODOS_MESES_SISTEMA:
-        renda_mes = rec_all_db[rec_all_db['mes_ano'] == m]['valor'].sum() if not rec_all_db.empty else 0.0
+        # Receitas Individuais
+        r_p1 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 1')]['valor'].sum() if not rec_all_db.empty else 0.0
+        r_p2 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 2')]['valor'].sum() if not rec_all_db.empty else 0.0
+        renda_mes = r_p1 + r_p2
+
+        # Cartões Individuais
+        c_p1 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 1')]['valor'].sum() if not cart_all_db.empty else 0.0
+        c_p2 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 2')]['valor'].sum() if not cart_all_db.empty else 0.0
         
-        c_val = cart_all_db[cart_all_db['mes_ano'] == m]['valor'].sum() if not cart_all_db.empty else 0.0
-        cartao_mes = c_val + prog_cart_p1 + prog_cart_p2
-        
+        # Pontuais Individuais e Comuns
         p_df = todos_pontuais_df[todos_pontuais_df['mes_ano'] == m] if not todos_pontuais_df.empty else pd.DataFrame()
-        pontual_mes = p_df['valor'].sum() if not p_df.empty else 0.0
-        
+        pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].sum() if not p_df.empty else 0.0
+        pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].sum() if not p_df.empty else 0.0
+        pont_comum = p_df[p_df['pessoa'] == 'Comum / Casa']['valor'].sum() if not p_df.empty else 0.0
+        pontual_mes = pont_p1 + pont_p2 + pont_comum
+
+        # Total Exclusivo por Pessoa
+        gasto_exclusivo_p1 = (c_p1 + prog_cart_p1) + fix_p1 + pont_p1
+        gasto_exclusivo_p2 = (c_p2 + prog_cart_p2) + fix_p2 + pont_p2
+
         caixinha_mes = caixinha_df[caixinha_df['mes_ano'] == m]['valor'].sum() if not caixinha_df.empty else 0.0
 
-        saidas_mes = cartao_mes + tot_fixos + pontual_mes + caixinha_mes
+        saidas_mes = (c_p1 + c_p2 + prog_cart_p1 + prog_cart_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
@@ -348,6 +379,11 @@ def calcular_sequencia_financeira():
         dados_meses[m] = {
             "saldo_anterior": saldo_acumulado_anterior,
             "renda_mes": renda_mes,
+            "renda_p1": r_p1,
+            "renda_p2": r_p2,
+            "gasto_p1": gasto_exclusivo_p1,
+            "gasto_p2": gasto_exclusivo_p2,
+            "despesas_comuns": comuns_val + pont_comum,
             "saidas_mes": saidas_mes,
             "caixinha_mes": caixinha_mes,
             "sobra_mes_isolada": sobra_do_mes_bruta,
@@ -360,13 +396,14 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO E BOTÃO DE SALVAMENTO
-col_head, col_save_all, col_logout = st.columns([6, 4, 1])
+# 10. CABEÇALHO COM BOTÃO REDIMENSIONADO E ALINHADO
+col_head, col_save_btn, col_logout_btn = st.columns([7, 2.5, 1.5])
 with col_head:
     st.title("📊 Painel Financeiro Integrado")
 
-with col_save_all:
-    if st.button("💾 SALVAR TODAS AS ALTERAÇÕES", type="primary", use_container_width=True):
+with col_save_btn:
+    st.write("") # Espaçador visual
+    if st.button("💾 SALVAR ALTERAÇÕES", type="primary", use_container_width=True):
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
         if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
         if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"])
@@ -384,8 +421,9 @@ with col_save_all:
         st.success("Tudo foi salvo com sucesso!")
         st.rerun()
 
-with col_logout:
-    if st.button("🚪 Sair"):
+with col_logout_btn:
+    st.write("") # Espaçador visual
+    if st.button("🚪 Sair", use_container_width=True):
         st.session_state["autenticado"] = False
         st.rerun()
 
@@ -404,8 +442,8 @@ st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros[mes_atual]
 
-# PAINEL DINÂMICO
-st.markdown(f"#### ⚡ Resumo Financeiro - {mes_atual}")
+# PAINEL RESUMO MENSAL COM DETALHAMENTO DE PESSOA 1 E PESSOA 2
+st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
 
 s_final = d_foco['saldo_acumulado_final']
 delta_class = "delta-positive" if s_final >= 0 else "delta-negative"
@@ -418,11 +456,11 @@ st.markdown(f"""
             <div class="metric-value">R$ {d_foco['saldo_anterior']:,.2f}</div>
         </div>
         <div class="metric-card">
-            <div class="metric-label">2. Renda do Mês</div>
+            <div class="metric-label">2. Renda Total Família</div>
             <div class="metric-value">R$ {d_foco['renda_mes']:,.2f}</div>
         </div>
         <div class="metric-card">
-            <div class="metric-label">3. Saídas Totais (Cartão/Fixos/PIX)</div>
+            <div class="metric-label">3. Saídas Totais (Geral)</div>
             <div class="metric-value">R$ {d_foco['saidas_mes']:,.2f}</div>
         </div>
         <div class="metric-card">
@@ -433,6 +471,25 @@ st.markdown(f"""
             <div class="metric-label">5. Saldo Acumulado Final</div>
             <div class="metric-value">R$ {s_final:,.2f}</div>
             <div class="{delta_class}">{delta_label}</div>
+        </div>
+    </div>
+    
+    <div class="metrics-container">
+        <div class="metric-card-sub">
+            <div class="metric-label">👤 Pessoa 1 (Lucas) - Renda</div>
+            <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</div>
+        </div>
+        <div class="metric-card-sub">
+            <div class="metric-label">👤 Pessoa 1 (Lucas) - Gastos Próprios</div>
+            <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</div>
+        </div>
+        <div class="metric-card-sub">
+            <div class="metric-label">👤 Pessoa 2 (Marcella) - Renda</div>
+            <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</div>
+        </div>
+        <div class="metric-card-sub">
+            <div class="metric-label">👤 Pessoa 2 (Marcella) - Gastos Próprios</div>
+            <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</div>
         </div>
     </div>
 """, unsafe_allow_html=True)
