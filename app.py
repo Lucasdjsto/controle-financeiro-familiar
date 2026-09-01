@@ -214,7 +214,7 @@ TODOS_MESES_SISTEMA = gerar_linha_tempo_dinamica("08.2026", 48)
 
 ESTRUTURA_CARTÕES = {
     "Pessoa 1": ["C6 Carbon", "Nubank", "Santander"],
-    "Pessoa 2": ["Banco do Brasil", "Rico / C6", "Amazon"]
+    "Pessoa 2": ["Banco do Brasil", "Rico", "C6", "Amazon"]
 }
 
 ESTRUTURA_RECEITAS = {
