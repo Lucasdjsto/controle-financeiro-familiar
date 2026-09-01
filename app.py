@@ -290,8 +290,12 @@ with col_logout:
         st.session_state["autenticado"] = False
         st.rerun()
 
-# 10. CARD DE LIQUIDEZ INSTANTÂNEA (PRIMEIRA TELA)
-mes_atual = MESES_PROJECAO[0]
+# 10. CARD DE LIQUIDEZ INSTANTÂNEA (COM SELETOR DE MÊS)
+col_tit, col_sel = st.columns([7, 3])
+with col_tit:
+    st.markdown("### ⚡ Situação Atual do Mês")
+with col_sel:
+    mes_atual = st.selectbox("Selecione o Mês para Análise:", MESES_PROJECAO, index=0)
 
 rec_p1_db = carregar_projecao("Pessoa 1", "RECEITA")
 rec_p2_db = carregar_projecao("Pessoa 2", "RECEITA")
@@ -323,7 +327,6 @@ cax_val = caixinha_df[caixinha_df['mes_ano'] == mes_atual]['valor'].sum() if not
 tot_despesas = tot_cart + tot_fixos + tot_pontuais + tot_prov_din + cax_val
 sobra_liquida = tot_rec - tot_despesas
 
-st.markdown(f"### ⚡ Situação Atual do Mês ({mes_atual})")
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Renda Bruta", f"R$ {tot_rec:,.2f}")
 k2.metric("Saídas Totais (Cartão/Fixos/PIX)", f"R$ {tot_despesas:,.2f}")
