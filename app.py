@@ -16,7 +16,6 @@ st.markdown("""
             padding-right: 0.6rem !important;
         }
         
-        /* Tabelas e DataEditors Ultra Compactos */
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
             font-size: 0.82rem !important;
         }
@@ -84,6 +83,15 @@ st.markdown("""
         }
     </style>
 """, unsafe_allow_html=True)
+
+# Helper seguro para conversão de números (evita TypeError/ValueError)
+def safe_float(val, default=0.0):
+    try:
+        if pd.isna(val) or val is None or str(val).strip() == "":
+            return default
+        return float(val)
+    except (ValueError, TypeError):
+        return default
 
 # 3. Autenticação por Senha
 def verificar_senha():
@@ -270,13 +278,13 @@ def carregar_status_faturas():
     query = "SELECT * FROM status_faturas"
     return pd.read_sql(text(query), engine)
 
-# 8. Funções de Escrita
+# 8. Funções de Escrita com Tratamento Seguro de Erros
 def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
-            item = row['Item']
+            item = str(row['Item'])
             for mes in meses_visiveis:
-                val = float(row[mes]) if pd.notnull(row[mes]) else 0.0
+                val = safe_float(row[mes])
                 query = '''
                     INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
                     VALUES (:pessoa, :tipo, :item, :mes, :val)
@@ -291,7 +299,7 @@ def salvar_fixos(pessoa, df_editado):
         for _, row in df_editado.iterrows():
             if str(row['item']).strip():
                 query = "INSERT INTO gastos_fixos (pessoa, item, valor) VALUES (:pessoa, :item, :val)"
-                conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "val": float(row['valor'])})
+                conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "val": safe_float(row['valor'])})
 
 def salvar_comuns(df_editado):
     with engine.begin() as conn:
@@ -300,7 +308,7 @@ def salvar_comuns(df_editado):
             if str(row['item']).strip():
                 pag = str(row.get('pagador', 'Dividido (50/50)'))
                 query = "INSERT INTO gastos_comuns (item, valor, pagador) VALUES (:item, :val, :pag)"
-                conn.execute(text(query), {"item": str(row['item']), "val": float(row['valor']), "pag": pag})
+                conn.execute(text(query), {"item": str(row['item']), "val": safe_float(row['valor']), "pag": pag})
 
 def salvar_status_fatura(pessoa, mes_ano, fechada):
     with engine.begin() as conn:
@@ -323,7 +331,7 @@ def inserir_gasto_rapido(mes_ano, pessoa, descricao, categoria, valor):
             "pessoa": pessoa,
             "descricao": descricao,
             "categoria": categoria,
-            "valor": float(valor)
+            "valor": safe_float(valor)
         })
     st.cache_data.clear()
 
@@ -336,7 +344,7 @@ def salvar_caixinha(df_editado):
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
             mes = row['Mês']
-            val = float(row['Aporte do Mês (R$)']) if pd.notnull(row['Aporte do Mês (R$)']) else 0.0
+            val = safe_float(row['Aporte do Mês (R$)'])
             query = '''
                 INSERT INTO caixinha (mes_ano, valor)
                 VALUES (:mes, :val)
@@ -349,9 +357,12 @@ def salvar_programado_cartao(pessoa, df_editado):
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM programado_cartao WHERE pessoa = :pessoa"), {"pessoa": pessoa})
         for _, row in df_editado.iterrows():
-            if str(row['descricao']).strip():
+            if pd.notnull(row.get('descricao')) and str(row['descricao']).strip():
+                cartao_val = str(row['cartao']) if pd.notnull(row.get('cartao')) else ESTRUTURA_CARTÕES[pessoa][0]
+                desc_val = str(row['descricao'])
+                val_val = safe_float(row.get('valor'))
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
-                conn.execute(text(query), {"pessoa": pessoa, "cartao": str(row['cartao']), "desc": str(row['descricao']), "val": float(row['valor'])})
+                conn.execute(text(query), {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
 
 # 9. LÓGICA DE CÁLCULO FINANCEIRO
 def calcular_sequencia_financeira():
@@ -359,18 +370,18 @@ def calcular_sequencia_financeira():
     cart_all_db = carregar_todas_projecoes("CARTAO")
     status_fat_db = carregar_status_faturas()
     
-    prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].sum()
-    prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].sum()
+    prog_cart_p1 = carregar_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum()
+    prog_cart_p2 = carregar_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum()
     
-    fix_p1 = carregar_fixos("Pessoa 1")['valor'].sum()
-    fix_p2 = carregar_fixos("Pessoa 2")['valor'].sum()
+    fix_p1 = carregar_fixos("Pessoa 1")['valor'].apply(safe_float).sum()
+    fix_p2 = carregar_fixos("Pessoa 2")['valor'].apply(safe_float).sum()
     
     df_comuns = carregar_comuns()
-    comuns_val_total = df_comuns['valor'].sum() if not df_comuns.empty else 0.0
+    comuns_val_total = df_comuns['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
     
-    comuns_p1 = df_comuns[df_comuns['pagador'] == 'Pessoa 1']['valor'].sum() if not df_comuns.empty else 0.0
+    comuns_p1 = df_comuns[df_comuns['pagador'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
     comuns_p2 = df_comuns[df_comuns['pagador'] == 'Pessoa 2']['valor'].sum() if not df_comuns.empty else 0.0
-    comuns_div = df_comuns[df_comuns['pagador'] == 'Dividido (50/50)']['valor'].sum() if not df_comuns.empty else 0.0
+    comuns_div = df_comuns[df_comuns['pagador'] == 'Dividido (50/50)']['valor'].apply(safe_float).sum() if not df_comuns.empty else 0.0
     
     tot_fixos = fix_p1 + fix_p2 + comuns_val_total
     
@@ -381,14 +392,13 @@ def calcular_sequencia_financeira():
     saldo_acumulado_anterior = 0.0
 
     for m in TODOS_MESES_SISTEMA:
-        r_p1 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 1')]['valor'].sum() if not rec_all_db.empty else 0.0
-        r_p2 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 2')]['valor'].sum() if not rec_all_db.empty else 0.0
+        r_p1 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 1')]['valor'].apply(safe_float).sum() if not rec_all_db.empty else 0.0
+        r_p2 = rec_all_db[(rec_all_db['mes_ano'] == m) & (rec_all_db['pessoa'] == 'Pessoa 2')]['valor'].apply(safe_float).sum() if not rec_all_db.empty else 0.0
         renda_mes = r_p1 + r_p2
 
-        c_p1 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 1')]['valor'].sum() if not cart_all_db.empty else 0.0
-        c_p2 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 2')]['valor'].sum() if not cart_all_db.empty else 0.0
+        c_p1 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 1')]['valor'].apply(safe_float).sum() if not cart_all_db.empty else 0.0
+        c_p2 = cart_all_db[(cart_all_db['mes_ano'] == m) & (cart_all_db['pessoa'] == 'Pessoa 2')]['valor'].apply(safe_float).sum() if not cart_all_db.empty else 0.0
         
-        # Verifica se fatura já fechou (Solução 2: Ignora provisões se estiver fechada)
         f1_fechada = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 1') & (status_fat_db['mes_ano'] == m)]['fechada'].iloc[0] if not status_fat_db.empty and not status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 1') & (status_fat_db['mes_ano'] == m)].empty else False
         f2_fechada = status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 2') & (status_fat_db['mes_ano'] == m)]['fechada'].iloc[0] if not status_fat_db.empty and not status_fat_db[(status_fat_db['pessoa'] == 'Pessoa 2') & (status_fat_db['mes_ano'] == m)].empty else False
 
@@ -396,15 +406,15 @@ def calcular_sequencia_financeira():
         add_prog_p2 = 0.0 if f2_fechada else prog_cart_p2
 
         p_df = todos_pontuais_df[todos_pontuais_df['mes_ano'] == m] if not todos_pontuais_df.empty else pd.DataFrame()
-        pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].sum() if not p_df.empty else 0.0
-        pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].sum() if not p_df.empty else 0.0
-        pont_comum = p_df[p_df['pessoa'] == 'Comum / Casa']['valor'].sum() if not p_df.empty else 0.0
+        pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
+        pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
+        pont_comum = p_df[p_df['pessoa'] == 'Comum / Casa']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
         pontual_mes = pont_p1 + pont_p2 + pont_comum
 
         gasto_exclusivo_p1 = (c_p1 + add_prog_p1) + fix_p1 + pont_p1 + comuns_p1 + (comuns_div / 2)
         gasto_exclusivo_p2 = (c_p2 + add_prog_p2) + fix_p2 + pont_p2 + comuns_p2 + (comuns_div / 2)
 
-        caixinha_mes = caixinha_df[caixinha_df['mes_ano'] == m]['valor'].sum() if not caixinha_df.empty else 0.0
+        caixinha_mes = caixinha_df[caixinha_df['mes_ano'] == m]['valor'].apply(safe_float).sum() if not caixinha_df.empty else 0.0
 
         saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
@@ -569,7 +579,7 @@ def renderizar_pessoa(pessoa, p_code):
         row_dict = {"Item": item}
         for mes in meses_visiveis:
             val = df_rec_db[(df_rec_db['item'] == item) & (df_rec_db['mes_ano'] == mes)]['valor']
-            row_dict[mes] = float(val.iloc[0]) if not val.empty else 0.0
+            row_dict[mes] = safe_float(val.iloc[0]) if not val.empty else 0.0
         rows_rec.append(row_dict)
     
     df_rec_grid = pd.DataFrame(rows_rec)
@@ -583,7 +593,6 @@ def renderizar_pessoa(pessoa, p_code):
 
     st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
     
-    # Checkbox de Fatura Fechada para o Mês Atual
     status_df = carregar_status_faturas()
     is_closed = status_df[(status_df['pessoa'] == pessoa) & (status_df['mes_ano'] == mes_atual)]['fechada'].iloc[0] if not status_df.empty and not status_df[(status_df['pessoa'] == pessoa) & (status_df['mes_ano'] == mes_atual)].empty else False
     
@@ -599,7 +608,7 @@ def renderizar_pessoa(pessoa, p_code):
         row_dict = {"Item": item}
         for mes in meses_visiveis:
             val = df_cart_db[(df_cart_db['item'] == item) & (df_cart_db['mes_ano'] == mes)]['valor']
-            row_dict[mes] = float(val.iloc[0]) if not val.empty else 0.0
+            row_dict[mes] = safe_float(val.iloc[0]) if not val.empty else 0.0
         rows_cart.append(row_dict)
         
     df_cart_grid = pd.DataFrame(rows_cart)
@@ -647,7 +656,7 @@ def renderizar_pessoa(pessoa, p_code):
             c_g1, c_g2, c_g3, c_g4 = st.columns([4, 3, 3, 1])
             c_g1.write(f"**{g['descricao']}**")
             c_g2.write(f"🏷️ {g['categoria']}")
-            c_g3.write(f"**R$ {g['valor']:,.2f}**")
+            c_g3.write(f"**R$ {safe_float(g['valor']):,.2f}**")
             if c_g4.button("🗑️", key=f"del_{g['id']}"):
                 deletar_gasto_pontual(g['id'])
                 st.rerun()
@@ -682,7 +691,7 @@ with tab_consolidado:
     
     for mes in meses_visiveis:
         val = df_caixinha_db[df_caixinha_db['mes_ano'] == mes]['valor']
-        val_aporte = float(val.iloc[0]) if not val.empty else 0.0
+        val_aporte = safe_float(val.iloc[0]) if not val.empty else 0.0
         rows_caixinha.append({"Mês": mes, "Aporte do Mês (R$)": val_aporte})
         
     df_caixinha_grid = pd.DataFrame(rows_caixinha)
