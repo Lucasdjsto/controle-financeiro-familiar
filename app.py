@@ -247,7 +247,7 @@ def gerar_linha_tempo_tela(mes_inicio_str="09.2026", quantidade_meses=48):
 
 TODOS_MESES_TELA = gerar_linha_tempo_tela("09.2026", 48)
 
-ESTRUTURA_CARTÕES = {
+ESTRUTURA_CARTÕES_BASE = {
     "Pessoa 1": ["C6 Carbon", "Nubank", "Santander"],
     "Pessoa 2": ["Banco do Brasil", "Rico", "C6", "Amazon"]
 }
@@ -380,7 +380,7 @@ def salvar_programado_cartao(pessoa, df_editado):
         conn.execute(text("DELETE FROM programado_cartao WHERE pessoa = :pessoa"), {"pessoa": pessoa})
         for _, row in df_editado.iterrows():
             if pd.notnull(row.get('descricao')) and str(row['descricao']).strip():
-                cartao_val = str(row['cartao']) if pd.notnull(row.get('cartao')) else ESTRUTURA_CARTÕES[pessoa][0]
+                cartao_val = str(row['cartao']) if pd.notnull(row.get('cartao')) else ESTRUTURA_CARTÕES_BASE[pessoa][0]
                 desc_val = str(row['descricao'])
                 val_val = safe_float(row.get('valor'))
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
@@ -662,8 +662,12 @@ def renderizar_pessoa(pessoa, p_code):
         st.cache_data.clear()
         st.rerun()
 
+    # Descobre dinamicamente todos os cartões cadastrados (padrão + salvos no banco)
+    cartoes_salvos = df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
+    lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + cartoes_salvos))
+
     rows_cart = []
-    for item in ESTRUTURA_CARTÕES[pessoa]:
+    for item in lista_cartoes_final:
         row_dict = {"Item": item}
         for mes_t in meses_visiveis:
             df_cart_db = get_projecao(pessoa, "CARTAO", mes_t)
@@ -683,7 +687,7 @@ def renderizar_pessoa(pessoa, p_code):
     conf_cart["Item"] = st.column_config.TextColumn("Cartão", disabled=True)
 
     df_cart_edit = st.data_editor(
-        df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=190,
+        df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=220,
         column_config=conf_cart
     )
     st.session_state[f"cart_{p_code}_df"] = df_cart_edit
@@ -695,7 +699,7 @@ def renderizar_pessoa(pessoa, p_code):
     df_prog_edit = st.data_editor(
         df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}", height=150,
         column_config={
-            "cartao": st.column_config.SelectboxColumn("Cartão", options=ESTRUTURA_CARTÕES[pessoa]),
+            "cartao": st.column_config.SelectboxColumn("Cartão", options=lista_cartoes_final),
             "descricao": st.column_config.TextColumn("Descrição (ex: Seguro, Netflix)"),
             "valor": st.column_config.NumberColumn("Valor Previsto (R$)", format="R$ %.2f", min_value=0.0)
         }
