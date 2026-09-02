@@ -629,11 +629,11 @@ if modo_visao.startswith("⚡"):
 
     st.divider()
 
-    # FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA DE CARTÕES E GASTOS DO MÊS
+    # FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA DE CARTÕES E GASTOS DO MÊS (Com conversão correta de mês)
     col_rapido_p1, col_rapido_p2 = st.columns(2)
 
     with col_rapido_p1:
-        st.subheader("💳 Atualização Rápida — Pessoa 1 (Lucas)")
+        st.subheader(f"💳 Atualização Rápida — Pessoa 1 (Lucas)")
         cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
         
         with st.form("form_rapido_p1"):
@@ -648,11 +648,12 @@ if modo_visao.startswith("⚡"):
             if btn_save_p1:
                 for cartao, val in valores_p1.items():
                     salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
+                st.cache_data.clear()
                 st.success("Cartões da Pessoa 1 atualizados com sucesso!")
                 st.rerun()
 
     with col_rapido_p2:
-        st.subheader("💳 Atualização Rápida — Pessoa 2 (Marcella)")
+        st.subheader(f"💳 Atualização Rápida — Pessoa 2 (Marcella)")
         cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
         
         with st.form("form_rapido_p2"):
@@ -667,13 +668,14 @@ if modo_visao.startswith("⚡"):
             if btn_save_p2:
                 for cartao, val in valores_p2.items():
                     salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
+                st.cache_data.clear()
                 st.success("Cartões da Pessoa 2 atualizados com sucesso!")
                 st.rerun()
 
     st.divider()
 
     # REGISTRO RÁPIDO DE PIX / DINHEIRO
-    with st.expander("➕ **Adicionar Gasto Rápido no Mês Atual (PIX / Dinheiro)**", expanded=True):
+    with st.expander(f"➕ **Adicionar Gasto Rápido em {mes_atual} (PIX / Dinheiro)**", expanded=True):
         with st.form("form_gasto_rapido_fast", clear_on_submit=True):
             c_f1, c_f2 = st.columns(2)
             with c_f1:
