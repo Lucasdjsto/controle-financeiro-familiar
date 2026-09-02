@@ -375,6 +375,7 @@ def calcular_sequencia_financeira():
 
     dados_meses = {}
     saldo_acumulado_anterior = 0.0
+    caixinha_acumulada_geral = 0.0
 
     for m in TODOS_MESES_SISTEMA:
         r_p1 = df_proj_all[(df_proj_all['mes_ano'] == m) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
@@ -405,11 +406,13 @@ def calcular_sequencia_financeira():
         gasto_exclusivo_p2 = (c_p2 + add_prog_p2) + fix_p2 + pont_p2 + comuns_p2 + (comuns_div / 2)
 
         caixinha_mes = df_caixinha_all[df_caixinha_all['mes_ano'] == m]['valor'].apply(safe_float).sum() if not df_caixinha_all.empty else 0.0
+        caixinha_acumulada_geral += caixinha_mes
 
         saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
+        patrimonio_total_final = saldo_conta_final + caixinha_acumulada_geral
 
         dados_meses[m] = {
             "saldo_anterior": saldo_acumulado_anterior,
@@ -420,8 +423,10 @@ def calcular_sequencia_financeira():
             "gasto_p2": gasto_exclusivo_p2,
             "saidas_mes": saidas_mes,
             "caixinha_mes": caixinha_mes,
+            "caixinha_acumulada": caixinha_acumulada_geral,
             "sobra_mes_isolada": sobra_do_mes_bruta,
-            "saldo_acumulado_final": saldo_conta_final
+            "saldo_acumulado_final": saldo_conta_final,
+            "patrimonio_total_final": patrimonio_total_final
         }
 
         saldo_acumulado_anterior = saldo_conta_final
@@ -509,8 +514,9 @@ with st.expander("➕ **Registrar Novo Gasto Rápido (PIX / Dinheiro)**", expand
 st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
 
 s_final = d_foco['saldo_acumulado_final']
-delta_class = "delta-positive" if s_final >= 0 else "delta-negative"
-delta_label = "↑ Positivo" if s_final >= 0 else "↓ Déficit"
+patrimonio_final = d_foco['patrimonio_total_final']
+delta_class = "delta-positive" if patrimonio_final >= 0 else "delta-negative"
+delta_label = "↑ Positivo" if patrimonio_final >= 0 else "↓ Déficit"
 
 st.markdown(f"""
     <div class="metrics-container">
@@ -527,12 +533,12 @@ st.markdown(f"""
             <div class="metric-value">R$ {d_foco['saidas_mes']:,.2f}</div>
         </div>
         <div class="metric-card">
-            <div class="metric-label">4. Aporte Caixinha</div>
-            <div class="metric-value">R$ {d_foco['caixinha_mes']:,.2f}</div>
+            <div class="metric-label">4. Total Acumulado Caixinha</div>
+            <div class="metric-value">R$ {d_foco['caixinha_acumulada']:,.2f}</div>
         </div>
         <div class="metric-card">
-            <div class="metric-label">5. Saldo Acumulado Final</div>
-            <div class="metric-value">R$ {s_final:,.2f}</div>
+            <div class="metric-label">5. Patrimônio Total (Conta + Caixinha)</div>
+            <div class="metric-value">R$ {patrimonio_final:,.2f}</div>
             <div class="{delta_class}">{delta_label}</div>
         </div>
     </div>
@@ -689,18 +695,14 @@ with tab_consolidado:
     
     st.subheader("📦 Caixinha de Reserva da Família (Acumulativa)")
     
-    # Calcula o total acumulado real considerando TODA a linha do tempo desde o início até o último mês visível
     rows_caixinha = []
     acumulado_total_geral = 0.0
+    acumulado_por_mes = {}
     
-    # Primeiro, soma tudo o que existe no banco até o último mês da tabela visível
     for m_item in TODOS_MESES_SISTEMA:
         val_db = df_caixinha_all[df_caixinha_all['mes_ano'] == m_item]['valor'] if not df_caixinha_all.empty else pd.Series()
         val_aporte = safe_float(val_db.iloc[0]) if not val_db.empty else 0.0
         acumulado_total_geral += val_aporte
-        # Guarda o acumulado exato por mês
-        if "acumulado_por_mes" not in locals():
-            acumulado_por_mes = {}
         acumulado_por_mes[m_item] = acumulado_total_geral
 
     for mes in meses_visiveis:
@@ -734,7 +736,8 @@ with tab_consolidado:
     row_desp = {"Métrica": "3. Saídas Totais (Cartão + Fixos + PIX)"}
     row_caixinha = {"Métrica": "4. Aporte Caixinha (Mês)"}
     row_sobra_mes = {"Métrica": "5. Sobra Líquida Isolada do Mês"}
-    row_sal_fim = {"Métrica": "6. Saldo Final Acumulado em Conta"}
+    row_sal_fim = {"Métrica": "6. Saldo Final Conta (Corrente)"}
+    row_patrimonio = {"Métrica": "7. Patrimônio Total (Conta + Caixinha Acumulada)"}
 
     for m in meses_visiveis:
         d = dados_financeiros[m]
@@ -744,10 +747,11 @@ with tab_consolidado:
         row_caixinha[m] = d["caixinha_mes"]
         row_sobra_mes[m] = d["sobra_mes_isolada"]
         row_sal_fim[m] = d["saldo_acumulado_final"]
+        row_patrimonio[m] = d["patrimonio_total_final"]
 
     df_resumo = pd.DataFrame([
-        row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim
+        row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_patrimonio
     ])
     
     cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
-    st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=220)
+    st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=250)
