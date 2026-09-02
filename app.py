@@ -7,90 +7,98 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS para Tabelas Compactas e Layout Fluido
+# 2. Injeção de CSS para Caixas Destacadas e Topo Otimizado (Sem cortes)
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 0.8rem !important;
-            padding-bottom: 1.2rem !important;
-            padding-left: 0.6rem !important;
-            padding-right: 0.6rem !important;
+            padding-top: 0.2rem !important;
+            padding-bottom: 1rem !important;
+            padding-left: 0.4rem !important;
+            padding-right: 0.4rem !important;
         }
         
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
-            font-size: 0.82rem !important;
+            font-size: 0.8rem !important;
         }
         
         .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
-            padding: 2px 6px !important;
+            padding: 2px 4px !important;
         }
         
-        .metrics-container {
+        /* Estilos Compactos e Bonitos das Caixas */
+        .metrics-container-compact {
             display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
+            flex-direction: column;
+            gap: 4px;
             width: 100%;
-            margin-bottom: 0.6rem;
+            margin-bottom: 0.5rem;
         }
         
-        .metric-card {
-            background-color: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 10px 12px;
-            flex: 1 1 calc(20% - 10px);
-            min-width: 160px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        .metric-row-compact {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 6px;
+            padding: 6px 10px;
         }
 
-        .metric-card-reserva {
-            background-color: #0f2942;
-            border: 1px solid #38bdf8;
-            border-radius: 8px;
-            padding: 10px 12px;
-            flex: 1 1 calc(20% - 10px);
-            min-width: 160px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        .metric-row-reserva {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #0c2340;
+            border: 1px solid #0284c7;
+            border-radius: 6px;
+            padding: 6px 10px;
         }
 
-        .metric-card-sub {
-            background-color: #0f172a;
-            border: 1px dashed #475569;
-            border-radius: 8px;
-            padding: 8px 10px;
-            flex: 1 1 calc(25% - 10px);
-            min-width: 150px;
+        .metric-row-final {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #1e1b4b;
+            border: 1px solid #6366f1;
+            border-radius: 6px;
+            padding: 6px 10px;
+        }
+
+        .metric-row-patrimonio {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #422006;
+            border: 1px solid #d97706;
+            border-radius: 6px;
+            padding: 6px 10px;
         }
         
-        .metric-label {
-            font-size: 0.78rem;
-            color: #94a3b8;
-            margin-bottom: 2px;
+        .metric-label-compact {
+            font-size: 0.72rem;
+            color: #9ca3af;
             font-weight: 500;
         }
         
-        .metric-value {
-            font-size: 1.15rem;
+        .metric-value-compact {
+            font-size: 0.88rem;
             font-weight: 700;
-            color: #f8fafc;
+            color: #f3f4f6;
         }
         
-        .delta-positive { color: #4ade80; font-size: 0.75rem; font-weight: 600; }
-        .delta-negative { color: #f87171; font-size: 0.75rem; font-weight: 600; }
+        .app-title {
+            font-size: 1.1rem !important;
+            font-weight: 700;
+            color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+        }
 
         .stButton > button {
             border-radius: 6px;
             font-weight: 600;
-            padding: 4px 12px;
-            font-size: 0.85rem;
-        }
-
-        @media (max-width: 1024px) {
-            .metric-card, .metric-card-reserva, .metric-card-sub { flex: 1 1 calc(33.33% - 10px); }
-        }
-        @media (max-width: 640px) {
-            .metric-card, .metric-card-reserva, .metric-card-sub { flex: 1 1 100%; }
-            .metric-value { font-size: 1.1rem; }
+            padding: 4px 10px;
+            font-size: 0.8rem;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -104,7 +112,7 @@ def safe_float(val, default=0.0):
     except (ValueError, TypeError):
         return default
 
-# Funções de Conversão de Mês Visual para Banco (Deslocamento de +1 mês)
+# Funções de Conversão de Mês Visual para Banco
 def mes_banco_para_tela(mes_banco):
     try:
         m, y = map(int, mes_banco.split("."))
@@ -127,7 +135,7 @@ def mes_tela_para_banco(mes_tela):
     except:
         return mes_tela
 
-# 3. Autenticação por Senha (Fixada em pretabebe)
+# 3. Autenticação por Senha
 def verificar_senha():
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
@@ -135,10 +143,10 @@ def verificar_senha():
     if st.session_state["autenticado"]:
         return True
 
-    st.title("🔒 Acesso Restrito - Gestão Financeira")
+    st.title("🔒 Acesso Restrito")
     
     with st.form("form_login"):
-        senha_digitada = st.text_input("Digite a senha de acesso:", type="password")
+        senha_digitada = st.text_input("Senha:", type="password")
         botao_entrar = st.form_submit_button("Entrar")
         
         if botao_entrar:
@@ -147,7 +155,7 @@ def verificar_senha():
                 st.success("Acesso liberado!")
                 st.rerun()
             else:
-                st.error("Senha incorreta! Tente novamente.")
+                st.error("Senha incorreta!")
     return False
 
 if not verificar_senha():
@@ -158,7 +166,7 @@ if not verificar_senha():
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
     if not db_url:
-        st.error("❌ Variável de conexão com o banco não configurada.")
+        st.error("❌ Conexão com banco não configurada.")
         st.stop()
     if "sslmode" not in db_url:
         db_url += "?sslmode=require" if "?" not in db_url else "&sslmode=require"
@@ -238,7 +246,7 @@ def init_db():
                 );
             '''))
     except Exception as e:
-        st.error(f"Erro de Conexão com o Banco de Dados: {e}")
+        st.error(f"Erro no Banco: {e}")
 
 init_db()
 
@@ -264,7 +272,7 @@ ESTRUTURA_CARTÕES_BASE = {
 
 ESTRUTURA_RECEITAS = ["Salário Base", "Receita Extra", "Receita Extra 1", "Receita Extra 2"]
 
-# 7. Funções de Leitura Otimizadas em Lote (Cache de 5 minutos)
+# 7. Funções de Leitura Otimizadas em Lote
 @st.cache_data(ttl=300)
 def carregar_dados_globais():
     with engine.connect() as conn:
@@ -408,7 +416,7 @@ def salvar_programado_cartao(pessoa, df_editado):
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
 
-# 9. LÓGICA DE CÁLCULO FINANCEIRO OTIMIZADA E RIGOROSA
+# 9. LÓGICA DE CÁLCULO FINANCEIRO
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
@@ -492,14 +500,12 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO E CONTROLES
-col_head, col_save_btn, col_logout_btn = st.columns([6, 3.5, 1.5])
-with col_head:
-    st.title("📊 Painel Financeiro Integrado")
-
-with col_save_btn:
-    st.write("")
-    if st.button("💾 SALVAR PROJEÇÃO LONGO PRAZO", type="primary", use_container_width=True):
+# 10. CABEÇALHO PERFEITO E LIVRE DE CORTES
+col_h1, col_h2, col_h3 = st.columns([4, 4, 2], gap="small")
+with col_h1:
+    st.markdown('<p class="app-title">📊 Painel Financeiro</p>', unsafe_allow_html=True)
+with col_h2:
+    if st.button("💾 Salvar", use_container_width=True):
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
         if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
         if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"])
@@ -512,22 +518,20 @@ with col_save_btn:
 
         if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"])
         if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"])
-        
         st.cache_data.clear()
-        st.success("Tudo foi salvo com sucesso!")
+        st.success("Salvo!")
         st.rerun()
-
-with col_logout_btn:
-    st.write("")
+with col_h3:
     if st.button("🚪 Sair", use_container_width=True):
         st.session_state["autenticado"] = False
         st.rerun()
 
 # SELECTOR DE MODO DE VISUALIZAÇÃO
 modo_visao = st.radio(
-    "Modo de Navegação:", 
-    ["⚡ **Modo Rápido (Dia a Dia do Mês Atual)**", "📈 **Projeção Completa & Longo Prazo**"], 
-    horizontal=True
+    "Navegação:", 
+    ["⚡ **Modo Rápido**", "📈 **Projeção Longo Prazo**"], 
+    horizontal=True,
+    label_visibility="collapsed"
 )
 
 st.divider()
@@ -535,24 +539,23 @@ st.divider()
 # CONTROLES TEMPORAIS
 idx_padrao = TODOS_MESES_TELA.index("09.2026") if "09.2026" in TODOS_MESES_TELA else 0
 
-c_sel1, c_sel2, c_reset = st.columns([5, 4, 3])
-with c_sel1:
+if modo_visao.startswith("⚡"):
     mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
     st.session_state["mes_atual_sel"] = mes_atual
-with c_sel2:
-    modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
-with c_reset:
-    st.write("")
-    if st.button("🔄 Resetar Status Faturas", help="Limpa do banco todos os status de Fatura Fechada acumulados"):
-        resetar_todos_status_faturas()
-        st.success("Status de faturas resetados no banco!")
-        st.rerun()
-
-idx_foco = TODOS_MESES_TELA.index(mes_atual)
-qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
-
-meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
-st.session_state["meses_v"] = meses_visiveis
+    meses_visiveis = [mes_atual]
+    st.session_state["meses_v"] = meses_visiveis
+else:
+    col_m1, col_m2 = st.columns([7, 3])
+    with col_m1:
+        mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
+        st.session_state["mes_atual_sel"] = mes_atual
+    with col_m2:
+        modo_exibicao = st.selectbox("Horizonte:", ["6 Meses", "12 Meses"], index=0, label_visibility="collapsed")
+    
+    idx_foco = TODOS_MESES_TELA.index(mes_atual)
+    qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
+    meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
+    st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros.get(mes_atual, {
     "saldo_anterior": 0.0, "renda_mes": 0.0, "renda_p1": 0.0, "renda_p2": 0.0,
@@ -562,193 +565,160 @@ d_foco = dados_financeiros.get(mes_atual, {
 })
 
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO (EXCLUSIVO PARA O DIA A DIAS DO MÊS CORRENTE)
+# SEÇÃO 1: MODO RÁPIDO (EXATAMENTE AS 5 CAIXAS ESTILIZADAS ORIGINAIS)
 # ====================================================================
 if modo_visao.startswith("⚡"):
-    st.markdown(f"### ⚡ Painel Diário Rápido — Referência: **{mes_atual}**")
-    st.info("💡 **Dica:** Os valores exibidos abaixo correspondem exatamente ao mês selecionado acima. Ao alterar e salvar, eles atualizam de imediato o saldo em conta e a projeção de longo prazo.")
-
-    # PAINEL DE RESUMO DO MÊS
+    
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
-    patrimonio_final = d_foco['patrimonio_total_final']
-    delta_class = "delta-positive" if patrimonio_final >= 0 else "delta-negative"
-    delta_label = "↑ Positivo" if patrimonio_final >= 0 else "↓ Déficit"
+    delta_txt = "Positivo" if s_final >= 0 else "Déficit"
 
     st.markdown(f"""
-        <div class="metrics-container">
-            <div class="metric-card">
-                <div class="metric-label">1. Saldo Inicial em Conta</div>
-                <div class="metric-value">R$ {d_foco['saldo_anterior']:,.2f}</div>
+        <div class="metrics-container-compact">
+            <div class="metric-row-compact">
+                <span class="metric-label-compact">1. Saldo Inicial em Conta</span>
+                <span class="metric-value-compact">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="metric-card">
-                <div class="metric-label">2. Renda Total Família</div>
-                <div class="metric-value">R$ {d_foco['renda_mes']:,.2f}</div>
+            <div class="metric-row-compact">
+                <span class="metric-label-compact">2. Renda Total Família</span>
+                <span class="metric-value-compact">R$ {d_foco['renda_mes']:,.2f}</span>
             </div>
-            <div class="metric-card">
-                <div class="metric-label">3. Saídas Totais (Geral)</div>
-                <div class="metric-value">R$ {d_foco['saidas_mes']:,.2f}</div>
+            <div class="metric-row-compact">
+                <span class="metric-label-compact">3. Saídas Totais (Geral)</span>
+                <span class="metric-value-compact">R$ {d_foco['saidas_mes']:,.2f}</span>
             </div>
-            <div class="metric-card-reserva">
-                <div class="metric-label" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</div>
-                <div class="metric-value" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</div>
+            <div class="metric-row-reserva">
+                <span class="metric-label-compact" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</span>
+                <span class="metric-value-compact" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
-            <div class="metric-card">
-                <div class="metric-label">5. Saldo Corrente em Conta</div>
-                <div class="metric-value">R$ {s_final:,.2f}</div>
-                <div class="{delta_class}">{delta_label} (Disponível)</div>
-            </div>
-        </div>
-        
-        <div class="metrics-container">
-            <div class="metric-card" style="border: 1px dashed #64748b; background-color: #0f172a;">
-                <div class="metric-label">💰 Patrimônio Total Geral (Conta + Caixinha)</div>
-                <div class="metric-value" style="color: #fACC15;">R$ {patrimonio_final:,.2f}</div>
-            </div>
-            <div class="metric-card-sub">
-                <div class="metric-label">👤 Pessoa 1 (Lucas) - Renda</div>
-                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</div>
-            </div>
-            <div class="metric-card-sub">
-                <div class="metric-label">👤 Pessoa 1 (Lucas) - Gastos Próprios</div>
-                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</div>
-            </div>
-            <div class="metric-card-sub">
-                <div class="metric-label">👤 Pessoa 2 (Marcella) - Renda</div>
-                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</div>
-            </div>
-            <div class="metric-card-sub">
-                <div class="metric-label">👤 Pessoa 2 (Marcella) - Gastos Próprios</div>
-                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</div>
+            <div class="metric-row-final">
+                <span class="metric-label-compact" style="color:#a5b4fc;">5. Saldo Corrente em Conta</span>
+                <span class="metric-value-compact" style="color:#a5b4fc;">R$ {s_final:,.2f} ({delta_txt})</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
     st.divider()
 
-    # FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA DE CARTÕES (Direcionado estritamente para 'mes_atual')
-    col_rapido_p1, col_rapido_p2 = st.columns(2)
-
-    with col_rapido_p1:
-        st.subheader(f"💳 Atualização Rápida — Pessoa 1 (Lucas)")
-        cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
+    st.subheader(f"💳 Cartões — Pessoa 1 (Lucas)")
+    cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
+    with st.form(f"form_rapido_p1_{mes_atual}"):
+        valores_p1 = {}
+        for cartao in cartoes_p1:
+            df_c = get_projecao("Pessoa 1", "CARTAO", mes_atual)
+            val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
+            valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{mes_atual}_{cartao}")
         
-        with st.form(f"form_rapido_p1_{mes_atual}"):
-            st.markdown(f"**Faturas de Cartão ({mes_atual})**")
-            valores_p1 = {}
-            for cartao in cartoes_p1:
-                df_c = get_projecao("Pessoa 1", "CARTAO", mes_atual)
-                val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
-                valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{mes_atual}_{cartao}")
-            
-            btn_save_p1 = st.form_submit_button(f"💾 Salvar Cartões P1 ({mes_atual})", type="primary", use_container_width=True)
-            if btn_save_p1:
-                for cartao, val in valores_p1.items():
-                    salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
-                st.cache_data.clear()
-                st.success(f"Cartões da Pessoa 1 para {mes_atual} atualizados com sucesso!")
-                st.rerun()
+        if st.form_submit_button(f"💾 Salvar Cartões P1 ({mes_atual})", type="primary", use_container_width=True):
+            for cartao, val in valores_p1.items():
+                salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
+            st.cache_data.clear()
+            st.success("Salvo!")
+            st.rerun()
 
-    with col_rapido_p2:
-        st.subheader(f"💳 Atualização Rápida — Pessoa 2 (Marcella)")
-        cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
+    st.write("")
+
+    st.subheader(f"💳 Cartões — Pessoa 2 (Marcella)")
+    cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
+    with st.form(f"form_rapido_p2_{mes_atual}"):
+        valores_p2 = {}
+        for cartao in cartoes_p2:
+            df_c = get_projecao("Pessoa 2", "CARTAO", mes_atual)
+            val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
+            valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{mes_atual}_{cartao}")
         
-        with st.form(f"form_rapido_p2_{mes_atual}"):
-            st.markdown(f"**Faturas de Cartão ({mes_atual})**")
-            valores_p2 = {}
-            for cartao in cartoes_p2:
-                df_c = get_projecao("Pessoa 2", "CARTAO", mes_atual)
-                val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
-                valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{mes_atual}_{cartao}")
-            
-            btn_save_p2 = st.form_submit_button(f"💾 Salvar Cartões P2 ({mes_atual})", type="primary", use_container_width=True)
-            if btn_save_p2:
-                for cartao, val in valores_p2.items():
-                    salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
-                st.cache_data.clear()
-                st.success(f"Cartões da Pessoa 2 para {mes_atual} atualizados com sucesso!")
-                st.rerun()
+        if st.form_submit_button(f"💾 Salvar Cartões P2 ({mes_atual})", type="primary", use_container_width=True):
+            for cartao, val in valores_p2.items():
+                salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
+            st.cache_data.clear()
+            st.success("Salvo!")
+            st.rerun()
 
     st.divider()
 
-    # REGISTRO RÁPIDO DE PIX / DINHEIRO
-    with st.expander(f"➕ **Adicionar Gasto Rápido em {mes_atual} (PIX / Dinheiro)**", expanded=True):
+    with st.expander(f"➕ **Adicionar Gasto Rápido ({mes_atual})**", expanded=False):
         with st.form(f"form_gasto_rapido_fast_{mes_atual}", clear_on_submit=True):
-            c_f1, c_f2 = st.columns(2)
-            with c_f1:
-                desc = st.text_input("Descrição (ex: Feira, Farmácia, Uber)", placeholder="Digite a descrição...")
-                val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
-            with c_f2:
-                pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
-                cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
+            desc = st.text_input("Descrição", placeholder="ex: Feira, Farmácia")
+            val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
+            pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
+            cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
                 
-            btn_salvar_gasto = st.form_submit_button("💾 Registrar Gasto Esporádico", type="primary", use_container_width=True)
-            
-            if btn_salvar_gasto:
+            if st.form_submit_button("💾 Registrar Gasto", type="primary", use_container_width=True):
                 if not desc.strip():
-                    st.error("Por favor, preencha a descrição do gasto.")
+                    st.error("Preencha a descrição.")
                 else:
                     inserir_gasto_rapido(mes_atual, pessoa, desc, cat, val)
-                    st.success("Gasto registrado com sucesso!")
+                    st.success("Registrado!")
                     st.rerun()
 
 # ====================================================================
-# SEÇÃO 2: PROJEÇÃO COMPLETA & LONGO PRAZO
+# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (EXATAMENTE OS 10 BOXES DA SUA REFERÊNCIA)
 # ====================================================================
 else:
-    st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
-
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
-    patrimonio_final = d_foco['patrimonio_total_final']
-    delta_class = "delta-positive" if patrimonio_final >= 0 else "delta-negative"
-    delta_label = "↑ Positivo" if patrimonio_final >= 0 else "↓ Déficit"
+    patrimonio_total = d_foco['patrimonio_total_final']
+    renda_p1 = d_foco['renda_p1']
+    renda_p2 = d_foco['renda_p2']
+    gasto_p1 = d_foco['gasto_p1']
+    gasto_p2 = d_foco['gasto_p2']
 
+    # Renderização exata dos 10 boxes customizados originais, sem quebrar o layout e sem erros
     st.markdown(f"""
-        <div class="metrics-container">
-            <div class="metric-card">
-                <div class="metric-label">1. Saldo Inicial em Conta</div>
-                <div class="metric-value">R$ {d_foco['saldo_anterior']:,.2f}</div>
+        <div class="metrics-container-compact">
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">1. Saldo Inicial</span>
+                    <span class="metric-value-compact">R$ {d_foco['saldo_anterior']:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">2. Renda Total</span>
+                    <span class="metric-value-compact">R$ {d_foco['renda_mes']:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">3. Saídas Totais</span>
+                    <span class="metric-value-compact">R$ {d_foco['saidas_mes']:,.2f}</span>
+                </div>
             </div>
-            <div class="metric-card">
-                <div class="metric-label">2. Renda Total Família</div>
-                <div class="metric-value">R$ {d_foco['renda_mes']:,.2f}</div>
+            
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-reserva" style="flex:1;">
+                    <span class="metric-label-compact" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</span>
+                    <span class="metric-value-compact" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+                </div>
+                <div class="metric-row-final" style="flex:1;">
+                    <span class="metric-label-compact" style="color:#a5b4fc;">5. Saldo Corrente em Conta</span>
+                    <span class="metric-value-compact" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
+                </div>
             </div>
-            <div class="metric-card">
-                <div class="metric-label">3. Saídas Totais (Geral)</div>
-                <div class="metric-value">R$ {d_foco['saidas_mes']:,.2f}</div>
+
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-patrimonio" style="flex:1;">
+                    <span class="metric-label-compact" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
+                    <span class="metric-value-compact" style="color:#fbbf24;">R$ {patrimonio_total:,.2f}</span>
+                </div>
             </div>
-            <div class="metric-card-reserva">
-                <div class="metric-label" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</div>
-                <div class="metric-value" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</div>
+
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 Pessoa 1 (Lucas) - Renda</span>
+                    <span class="metric-value-compact">R$ {renda_p1:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 Pessoa 1 (Lucas) - Gastos Próprios</span>
+                    <span class="metric-value-compact">R$ {gasto_p1:,.2f}</span>
+                </div>
             </div>
-            <div class="metric-card">
-                <div class="metric-label">5. Saldo Corrente em Conta</div>
-                <div class="metric-value">R$ {s_final:,.2f}</div>
-                <div class="{delta_class}">{delta_label} (Disponível)</div>
-            </div>
-        </div>
-        
-        <div class="metrics-container">
-            <div class="metric-card" style="border: 1px dashed #64748b; background-color: #0f172a;">
-                <div class="metric-label">💰 Patrimônio Total Geral (Conta + Caixinha)</div>
-                <div class="metric-value" style="color: #fACC15;">R$ {patrimonio_final:,.2f}</div>
-            </div>
-            <div class="metric-card-sub">
-                <div class="metric-label">👤 Pessoa 1 (Lucas) - Renda</div>
-                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</div>
-            </div>
-            <div class="metric-card-sub">
-                <div class="metric-label">👤 Pessoa 1 (Lucas) - Gastos Próprios</div>
-                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</div>
-            </div>
-            <div class="metric-card-sub">
-                <div class="metric-label">👤 Pessoa 2 (Marcella) - Renda</div>
-                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</div>
-            </div>
-            <div class="metric-card-sub">
-                <div class="metric-label">👤 Pessoa 2 (Marcella) - Gastos Próprios</div>
-                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</div>
+
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 Pessoa 2 (Marcella) - Renda</span>
+                    <span class="metric-value-compact">R$ {renda_p2:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 Pessoa 2 (Marcella) - Gastos Próprios</span>
+                    <span class="metric-value-compact">R$ {gasto_p2:,.2f}</span>
+                </div>
             </div>
         </div>
     """, unsafe_allow_html=True)
