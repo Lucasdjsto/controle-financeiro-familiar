@@ -436,11 +436,9 @@ def calcular_sequencia_financeira():
         r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         renda_mes = r_p1 + r_p2
 
-        raw_cartoes_p1 = df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
-        raw_cartoes_p2 = df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
-
-        cartoes_p1_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 1"] + [c for c in raw_cartoes_p1 if c not in ESTRUTURA_CARTÕES_BASE["Pessoa 1"] and "Total" not in c]
-        cartoes_p2_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 2"] + [c for c in raw_cartoes_p2 if c not in ESTRUTURA_CARTÕES_BASE["Pessoa 2"] and "Total" not in c]
+        # Força rigorosamente a adoção única dos cartões base corretos, ignorando qualquer duplicata
+        cartoes_p1_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
+        cartoes_p2_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
 
         c_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p1_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         c_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p2_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
@@ -526,7 +524,7 @@ with col_logout_btn:
         st.session_state["autenticado"] = False
         st.rerun()
 
-# SELECTOR DE MODO DE VISUALIZAÇÃO (Modo Rápido do Mês vs Projeção Completa)
+# SELECTOR DE MODO DE VISUALIZAÇÃO
 modo_visao = st.radio(
     "Modo de Navegação:", 
     ["⚡ **Modo Rápido (Dia a Dia do Mês Atual)**", "📈 **Projeção Completa & Longo Prazo**"], 
@@ -629,7 +627,7 @@ if modo_visao.startswith("⚡"):
 
     st.divider()
 
-    # FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA DE CARTÕES E GASTOS DO MÊS (Com conversão correta de mês)
+    # FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA DE CARTÕES
     col_rapido_p1, col_rapido_p2 = st.columns(2)
 
     with col_rapido_p1:
@@ -696,10 +694,9 @@ if modo_visao.startswith("⚡"):
                     st.rerun()
 
 # ====================================================================
-# SEÇÃO 2: PROJEÇÃO COMPLETA & LONGO PRAZO (O SEU PAINEL ORIGINAL)
+# SEÇÃO 2: PROJEÇÃO COMPLETA & LONGO PRAZO
 # ====================================================================
 else:
-    # PAINEL RESUMO MENSAL
     st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
 
     s_final = d_foco['saldo_acumulado_final']
@@ -816,9 +813,8 @@ else:
             st.cache_data.clear()
             st.rerun()
 
-        cartoes_salvos = df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
-        lista_cartoes_limpa = [c for c in cartoes_salvos if "Total" not in c and c not in ESTRUTURA_CARTÕES_BASE[pessoa]]
-        lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + lista_cartoes_limpa))
+        # Força rigorosamente a exibição apenas dos cartões base corretos, impedindo qualquer duplicação
+        lista_cartoes_final = ESTRUTURA_CARTÕES_BASE[pessoa]
 
         rows_cart = []
         for item in lista_cartoes_final:
