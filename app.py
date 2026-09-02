@@ -535,12 +535,9 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO PERFEITO E LIVRE DE CORTES
-col_head, col_save_btn, col_logout_btn = st.columns([5, 3.5, 1.5], gap="small")
-with col_head:
-    st.markdown("### 📊 Painel Financeiro")
-
-with col_save_btn:
+# 10. BARRA LATERAL (SIDEBAR) PARA BOTÕES DE SALVAR E SAIR SEMPRE VISÍVEIS
+with st.sidebar:
+    st.markdown("### ⚙️ Menu Principal")
     if st.button("💾 SALVAR DADOS", type="primary", use_container_width=True):
         mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"], mes_foco_atual)
@@ -561,8 +558,8 @@ with col_save_btn:
         st.success("Salvo com sucesso!")
         st.rerun()
 
-with col_logout_btn:
-    if st.button("🚪 Sair", use_container_width=True):
+    st.divider()
+    if st.button("🚪 Sair do Sistema", use_container_width=True):
         st.session_state["autenticado"] = False
         st.rerun()
 
