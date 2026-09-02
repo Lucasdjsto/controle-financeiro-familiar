@@ -252,7 +252,8 @@ ESTRUTURA_CARTÕES = {
     "Pessoa 2": ["Banco do Brasil", "Rico", "C6", "Amazon"]
 }
 
-ESTRUTURA_RECEITAS = ["Salário Base", "Receita Extra 1", "Receita Extra 2"]
+# Mantém a linha original "Receita Extra" e adiciona as novas variações
+ESTRUTURA_RECEITAS = ["Salário Base", "Receita Extra", "Receita Extra 1", "Receita Extra 2"]
 
 # 7. Funções de Leitura Otimizadas em Lote (Cache de 5 minutos)
 @st.cache_data(ttl=300)
@@ -613,9 +614,8 @@ tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
 ])
 
 def renderizar_pessoa(pessoa, p_code):
-    # 1. RECEITAS COM TOTALIZADOR
+    # 1. RECEITAS COM TOTALIZADOR E LINHAS RESTAURADAS
     st.subheader("💵 1. Receitas (Salário e Rendimentos)")
-    df_rec_db = get_projecao(pessoa, "RECEITA", meses_visiveis[0]) # Busca base
     rows_rec = []
     for item in ESTRUTURA_RECEITAS:
         row_dict = {"Item": item}
@@ -625,8 +625,7 @@ def renderizar_pessoa(pessoa, p_code):
             row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
         rows_rec.append(row_dict)
     
-    # Linha de Total Calculada para Receitas
-    row_total_rec = {"Item": "➕ Total Receitas do Mês"}
+    row_total_rec = {"Item": "➕ Total Receitas do Mes"}
     for mes_t in meses_visiveis:
         soma_rec = sum(safe_float(r.get(mes_t)) for r in rows_rec)
         row_total_rec[mes_t] = soma_rec
@@ -634,12 +633,11 @@ def renderizar_pessoa(pessoa, p_code):
 
     df_rec_grid = pd.DataFrame(rows_rec)
     
-    # Configuração para desabilitar a edição da linha de total
     conf_rec = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
     conf_rec["Item"] = st.column_config.TextColumn("Item / Descrição", disabled=True)
 
     df_rec_edit = st.data_editor(
-        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=150,
+        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=170,
         column_config=conf_rec
     )
     st.session_state[f"rec_{p_code}_df"] = df_rec_edit
@@ -676,7 +674,6 @@ def renderizar_pessoa(pessoa, p_code):
             row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
         rows_cart.append(row_dict)
         
-    # Linha de Total Calculada para Cartões
     row_total_cart = {"Item": "💳 Total Cartões do Mês"}
     for mes_t in meses_visiveis:
         soma_cart = sum(safe_float(c.get(mes_t)) for c in rows_cart)
