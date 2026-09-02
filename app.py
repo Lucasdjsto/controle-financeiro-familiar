@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Otimizado para Mobile
+# 2. Injeção de CSS Compacto e Otimizado para Mobile (Sem cortar o topo)
 st.markdown("""
     <style>
         .block-container {
@@ -24,7 +24,68 @@ st.markdown("""
         .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
             padding: 2px 4px !important;
         }
+        
+        /* Estilos Compactos e Bonitos das Caixas */
+        .metrics-container-compact {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-row-compact {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 6px;
+            padding: 6px 10px;
+        }
 
+        .metric-row-reserva {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #0c2340;
+            border: 1px solid #0284c7;
+            border-radius: 6px;
+            padding: 6px 10px;
+        }
+
+        .metric-row-final {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #1e1b4b;
+            border: 1px solid #6366f1;
+            border-radius: 6px;
+            padding: 6px 10px;
+        }
+
+        .metric-row-patrimonio {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #422006;
+            border: 1px solid #d97706;
+            border-radius: 6px;
+            padding: 6px 10px;
+        }
+        
+        .metric-label-compact {
+            font-size: 0.72rem;
+            color: #9ca3af;
+            font-weight: 500;
+        }
+        
+        .metric-value-compact {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #f3f4f6;
+        }
+        
         .app-title {
             font-size: 1.1rem !important;
             font-weight: 700;
@@ -434,7 +495,7 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO LIMPO E ORGANIZADO (Sem cortes)
+# 10. CABEÇALHO PERFEITO E LIVRE DE CORTES
 col_h1, col_h2, col_h3 = st.columns([4, 4, 2], gap="small")
 with col_h1:
     st.markdown('<p class="app-title">📊 Painel Financeiro</p>', unsafe_allow_html=True)
@@ -499,7 +560,7 @@ d_foco = dados_financeiros.get(mes_atual, {
 })
 
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO (EXATAMENTE 5 CAIXAS ESTILIZADAS COM ST.CONTAINER)
+# SEÇÃO 1: MODO RÁPIDO (EXATAMENTE AS 5 CAIXAS ESTILIZADAS ORIGINAIS)
 # ====================================================================
 if modo_visao.startswith("⚡"):
     
@@ -507,25 +568,30 @@ if modo_visao.startswith("⚡"):
     caixinha_acum = d_foco['caixinha_acumulada']
     delta_txt = "Positivo" if s_final >= 0 else "Déficit"
 
-    with st.container(border=True):
-        st.caption("1. Saldo Inicial em Conta")
-        st.markdown(f"### R$ {d_foco['saldo_anterior']:,.2f}")
-
-    with st.container(border=True):
-        st.caption("2. Renda Total Família")
-        st.markdown(f"### R$ {d_foco['renda_mes']:,.2f}")
-
-    with st.container(border=True):
-        st.caption("3. Saídas Totais (Geral)")
-        st.markdown(f"### R$ {d_foco['saidas_mes']:,.2f}")
-
-    with st.container(border=True):
-        st.caption("🔒 4. Caixinha Guardada (Reserva)")
-        st.markdown(f"<h3 style='color:#38bdf8;'>R$ {caixinha_acum:,.2f}</h3>", unsafe_allow_html=True)
-
-    with st.container(border=True):
-        st.caption("5. Saldo Corrente em Conta")
-        st.markdown(f"<h3 style='color:#a5b4fc;'>R$ {s_final:,.2f} ({delta_txt})</h3>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div class="metrics-container-compact">
+            <div class="metric-row-compact">
+                <span class="metric-label-compact">1. Saldo Inicial em Conta</span>
+                <span class="metric-value-compact">R$ {d_foco['saldo_anterior']:,.2f}</span>
+            </div>
+            <div class="metric-row-compact">
+                <span class="metric-label-compact">2. Renda Total Família</span>
+                <span class="metric-value-compact">R$ {d_foco['renda_mes']:,.2f}</span>
+            </div>
+            <div class="metric-row-compact">
+                <span class="metric-label-compact">3. Saídas Totais (Geral)</span>
+                <span class="metric-value-compact">R$ {d_foco['saidas_mes']:,.2f}</span>
+            </div>
+            <div class="metric-row-reserva">
+                <span class="metric-label-compact" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</span>
+                <span class="metric-value-compact" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+            </div>
+            <div class="metric-row-final">
+                <span class="metric-label-compact" style="color:#a5b4fc;">5. Saldo Corrente em Conta</span>
+                <span class="metric-value-compact" style="color:#a5b4fc;">R$ {s_final:,.2f} ({delta_txt})</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     st.divider()
 
@@ -581,7 +647,7 @@ if modo_visao.startswith("⚡"):
                     st.rerun()
 
 # ====================================================================
-# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (OS 10 BOXES DA SUA REFERÊNCIA)
+# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (EXATAMENTE OS 10 BOXES DA REFERÊNCIA)
 # ====================================================================
 else:
     s_final = d_foco['saldo_acumulado_final']
@@ -592,54 +658,65 @@ else:
     gasto_p1 = d_foco['gasto_p1']
     gasto_p2 = d_foco['gasto_p2']
 
-    # Os 10 boxes organizados em containers nativos seguros (sem erros de HTML)
-    col_l1, col_l2, col_l3 = st.columns(3)
-    with col_l1:
-        with st.container(border=True):
-            st.caption("1. Saldo Inicial")
-            st.markdown(f"**R$ {d_foco['saldo_anterior']:,.2f}**")
-    with col_l2:
-        with st.container(border=True):
-            st.caption("2. Renda Total")
-            st.markdown(f"**R$ {d_foco['renda_mes']:,.2f}**")
-    with col_l3:
-        with st.container(border=True):
-            st.caption("3. Saídas Totais")
-            st.markdown(f"**R$ {d_foco['saidas_mes']:,.2f}**")
+    # Renderização segura e impecável dos 10 boxes customizados originais
+    st.markdown(f"""
+        <div class="metrics-container-compact">
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">1. Saldo Inicial</span>
+                    <span class="metric-value-compact">R$ {d_foco['saldo_anterior']:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">2. Renda Total</span>
+                    <span class="metric-value-compact">R$ {d_foco['renda_mes']:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">3. Saídas Totais</span>
+                    <span class="metric-value-compact">R$ {d_foco['saidas_mes']:,.2f}</span>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-reserva" style="flex:1;">
+                    <span class="metric-label-compact" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</span>
+                    <span class="metric-value-compact" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+                </div>
+                <div class="metric-row-final" style="flex:1;">
+                    <span class="metric-label-compact" style="color:#a5b4fc;">5. Saldo Corrente em Conta</span>
+                    <span class="metric-value-compact" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
+                </div>
+            </div>
 
-    col_l4, col_l5 = st.columns(2)
-    with col_l4:
-        with st.container(border=True):
-            st.caption("🔒 4. Caixinha Guardada")
-            st.markdown(f"<span style='color:#38bdf8; font-weight:700;'>R$ {caixinha_acum:,.2f}</span>", unsafe_allow_html=True)
-    with col_l5:
-        with st.container(border=True):
-            st.caption("5. Saldo Corrente")
-            st.markdown(f"<span style='color:#a5b4fc; font-weight:700;'>R$ {s_final:,.2f}</span>", unsafe_allow_html=True)
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-patrimonio" style="flex:1;">
+                    <span class="metric-label-compact" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
+                    <span class="metric-value-compact" style="color:#fbbf24;">R$ {patrimonio_total:,.2f}</span>
+                </div>
+            </div>
 
-    with st.container(border=True):
-        st.caption("💰 Patrimônio Total Geral (Conta + Caixinha)")
-        st.markdown(f"<span style='color:#fbbf24; font-weight:700; font-size:1.1rem;'>R$ {patrimonio_total:,.2f}</span>", unsafe_allow_html=True)
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 Pessoa 1 (Lucas) - Renda</span>
+                    <span class="metric-value-compact">R$ {renda_p1:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 Pessoa 1 (Lucas) - Gastos Próprios</span>
+                    <span class="metric-value-compact">R$ {gasto_p1:,.2f}</span>
+                </div>
+            </div>
 
-    col_l6, col_l7 = st.columns(2)
-    with col_l6:
-        with st.container(border=True):
-            st.caption("👤 P1 (Lucas) - Renda")
-            st.markdown(f"**R$ {renda_p1:,.2f}**")
-    with col_l7:
-        with st.container(border=True):
-            st.caption("👤 P1 (Lucas) - Gastos Próprios")
-            st.markdown(f"**R$ {gasto_p1:,.2f}**")
-
-    col_l8, col_l9 = st.columns(2)
-    with col_l8:
-        with st.container(border=True):
-            st.caption("👤 P2 (Marcella) - Renda")
-            st.markdown(f"**R$ {renda_p2:,.2f}**")
-    with col_l9:
-        with st.container(border=True):
-            st.caption("👤 P2 (Marcella) - Gastos Próprios")
-            st.markdown(f"**R$ {gasto_p2:,.2f}**")
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 Pessoa 2 (Marcella) - Renda</span>
+                    <span class="metric-value-compact">R$ {renda_p2:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 Pessoa 2 (Marcella) - Gastos Próprios</span>
+                    <span class="metric-value-compact">R$ {gasto_p2:,.2f}</span>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     st.divider()
 
