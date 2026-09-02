@@ -300,6 +300,18 @@ def get_programado_cartao(pessoa):
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
 # 8. Funções de Escrita
+def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
+    mes_b = mes_tela_para_banco(mes_tela)
+    with engine.begin() as conn:
+        query = '''
+            INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
+            VALUES (:pessoa, :tipo, :item, :mes, :val)
+            ON CONFLICT (pessoa, tipo, item, mes_ano) 
+            DO UPDATE SET valor = EXCLUDED.valor;
+        '''
+        conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": safe_float(valor)})
+    st.cache_data.clear()
+
 def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
@@ -484,13 +496,13 @@ def calcular_sequencia_financeira():
 dados_financeiros = calcular_sequencia_financeira()
 
 # 10. CABEÇALHO E CONTROLES
-col_head, col_save_btn, col_logout_btn = st.columns([7, 3, 1.5])
+col_head, col_save_btn, col_logout_btn = st.columns([6, 3.5, 1.5])
 with col_head:
     st.title("📊 Painel Financeiro Integrado")
 
 with col_save_btn:
     st.write("")
-    if st.button("💾 SALVAR ALTERAÇÕES", type="primary", use_container_width=True):
+    if st.button("💾 SALVAR PROJEÇÃO LONGO PRAZO", type="primary", use_container_width=True):
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
         if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
         if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"])
@@ -514,12 +526,21 @@ with col_logout_btn:
         st.session_state["autenticado"] = False
         st.rerun()
 
+# SELECTOR DE MODO DE VISUALIZAÇÃO (Modo Rápido do Mês vs Projeção Completa)
+modo_visao = st.radio(
+    "Modo de Navegação:", 
+    ["⚡ **Modo Rápido (Dia a Dia do Mês Atual)**", "📈 **Projeção Completa & Longo Prazo**"], 
+    horizontal=True
+)
+
+st.divider()
+
 # CONTROLES TEMPORAIS
 idx_padrao = TODOS_MESES_TELA.index("09.2026") if "09.2026" in TODOS_MESES_TELA else 0
 
 c_sel1, c_sel2, c_reset = st.columns([5, 4, 3])
 with c_sel1:
-    mes_atual = st.selectbox("📅 Mês Atual (Referência Extrato Bancário):", TODOS_MESES_TELA[:36], index=idx_padrao)
+    mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
     st.session_state["mes_atual_sel"] = mes_atual
 with c_sel2:
     modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
@@ -543,306 +564,416 @@ d_foco = dados_financeiros.get(mes_atual, {
     "patrimonio_total_final": 0.0
 })
 
-# EXPANDER DE GASTO RÁPIDO
-with st.expander("➕ **Registrar Novo Gasto Rápido (PIX / Dinheiro)**", expanded=False):
-    with st.form("form_gasto_rapido_exp", clear_on_submit=True):
-        c_f1, c_f2 = st.columns(2)
-        with c_f1:
-            desc = st.text_input("Descrição (ex: Barbeiro, Feira, Farmácia)", placeholder="Digite a descrição...")
-            val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
-        with c_f2:
-            pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
-            cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
+# ====================================================================
+# SEÇÃO 1: MODO RÁPIDO (EXCLUSIVO PARA O DIA A DIA DO MÊS CORRENTE)
+# ====================================================================
+if modo_visao.startswith("⚡"):
+    st.markdown(f"### ⚡ Painel Diário Rápido — Referência: **{mes_atual}**")
+    st.info("💡 **Dica:** Atualize os valores dos cartões abaixo ou registre gastos rápidos. Tudo o que for alterado aqui já atualiza automaticamente a sua Projeção de Longo Prazo e o seu Saldo em Conta.")
+
+    # PAINEL DE RESUMO DO MÊS
+    s_final = d_foco['saldo_acumulado_final']
+    caixinha_acum = d_foco['caixinha_acumulada']
+    patrimonio_final = d_foco['patrimonio_total_final']
+    delta_class = "delta-positive" if patrimonio_final >= 0 else "delta-negative"
+    delta_label = "↑ Positivo" if patrimonio_final >= 0 else "↓ Déficit"
+
+    st.markdown(f"""
+        <div class="metrics-container">
+            <div class="metric-card">
+                <div class="metric-label">1. Saldo Inicial em Conta</div>
+                <div class="metric-value">R$ {d_foco['saldo_anterior']:,.2f}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">2. Renda Total Família</div>
+                <div class="metric-value">R$ {d_foco['renda_mes']:,.2f}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">3. Saídas Totais (Geral)</div>
+                <div class="metric-value">R$ {d_foco['saidas_mes']:,.2f}</div>
+            </div>
+            <div class="metric-card-reserva">
+                <div class="metric-label" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</div>
+                <div class="metric-value" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">5. Saldo Corrente em Conta</div>
+                <div class="metric-value">R$ {s_final:,.2f}</div>
+                <div class="{delta_class}">{delta_label} (Disponível)</div>
+            </div>
+        </div>
+        
+        <div class="metrics-container">
+            <div class="metric-card" style="border: 1px dashed #64748b; background-color: #0f172a;">
+                <div class="metric-label">💰 Patrimônio Total Geral (Conta + Caixinha)</div>
+                <div class="metric-value" style="color: #fACC15;">R$ {patrimonio_final:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 1 (Lucas) - Renda</div>
+                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 1 (Lucas) - Gastos Próprios</div>
+                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 2 (Marcella) - Renda</div>
+                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 2 (Marcella) - Gastos Próprios</div>
+                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA DE CARTÕES E GASTOS DO MÊS
+    col_rapido_p1, col_rapido_p2 = st.columns(2)
+
+    with col_rapido_p1:
+        st.subheader("💳 Atualização Rápida — Pessoa 1 (Lucas)")
+        cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
+        
+        with st.form("form_rapido_p1"):
+            st.markdown(f"**Faturas de Cartão ({mes_atual})**")
+            valores_p1 = {}
+            for cartao in cartoes_p1:
+                df_c = get_projecao("Pessoa 1", "CARTAO", mes_atual)
+                val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
+                valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{cartao}")
             
-        mes_target = st.selectbox("Mês de Referência", TODOS_MESES_TELA[:36], index=TODOS_MESES_TELA.index(mes_atual))
-        btn_salvar_gasto = st.form_submit_button("💾 Salvar Gasto", type="primary", use_container_width=True)
-        
-        if btn_salvar_gasto:
-            if not desc.strip():
-                st.error("Por favor, preencha a descrição do gasto.")
-            else:
-                inserir_gasto_rapido(mes_target, pessoa, desc, cat, val)
-                st.success("Gasto registrado com sucesso!")
+            btn_save_p1 = st.form_submit_button("💾 Salvar Cartões da Pessoa 1", type="primary", use_container_width=True)
+            if btn_save_p1:
+                for cartao, val in valores_p1.items():
+                    salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
+                st.success("Cartões da Pessoa 1 atualizados com sucesso!")
                 st.rerun()
 
-# PAINEL RESUMO MENSAL (Com Caixinha Visualmente Separada)
-st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
-
-s_final = d_foco['saldo_acumulado_final']
-caixinha_acum = d_foco['caixinha_acumulada']
-patrimonio_final = d_foco['patrimonio_total_final']
-delta_class = "delta-positive" if patrimonio_final >= 0 else "delta-negative"
-delta_label = "↑ Positivo" if patrimonio_final >= 0 else "↓ Déficit"
-
-st.markdown(f"""
-    <div class="metrics-container">
-        <div class="metric-card">
-            <div class="metric-label">1. Saldo Inicial em Conta</div>
-            <div class="metric-value">R$ {d_foco['saldo_anterior']:,.2f}</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">2. Renda Total Família</div>
-            <div class="metric-value">R$ {d_foco['renda_mes']:,.2f}</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">3. Saídas Totais (Geral)</div>
-            <div class="metric-value">R$ {d_foco['saidas_mes']:,.2f}</div>
-        </div>
-        <div class="metric-card-reserva">
-            <div class="metric-label" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</div>
-            <div class="metric-value" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">5. Saldo Corrente em Conta</div>
-            <div class="metric-value">R$ {s_final:,.2f}</div>
-            <div class="{delta_class}">{delta_label} (Disponível)</div>
-        </div>
-    </div>
-    
-    <div class="metrics-container">
-        <div class="metric-card" style="border: 1px dashed #64748b; background-color: #0f172a;">
-            <div class="metric-label">💰 Patrimônio Total Geral (Conta + Caixinha)</div>
-            <div class="metric-value" style="color: #fACC15;">R$ {patrimonio_final:,.2f}</div>
-        </div>
-        <div class="metric-card-sub">
-            <div class="metric-label">👤 Pessoa 1 (Lucas) - Renda</div>
-            <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</div>
-        </div>
-        <div class="metric-card-sub">
-            <div class="metric-label">👤 Pessoa 1 (Lucas) - Gastos Próprios</div>
-            <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</div>
-        </div>
-        <div class="metric-card-sub">
-            <div class="metric-label">👤 Pessoa 2 (Marcella) - Renda</div>
-            <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</div>
-        </div>
-        <div class="metric-card-sub">
-            <div class="metric-label">👤 Pessoa 2 (Marcella) - Gastos Próprios</div>
-            <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</div>
-        </div>
-    </div>
-""", unsafe_allow_html=True)
-
-st.divider()
-
-# 11. Interface Principal
-tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
-    "👤 Pessoa 1 (Lucas)", 
-    "👤 Pessoa 2 (Marcella)", 
-    "🏡 Despesas Comuns (Casa/Aluguel)",
-    "🏠 Visão Consolidada & Caixinha"
-])
-
-def renderizar_pessoa(pessoa, p_code):
-    st.subheader("💵 1. Receitas (Salário e Rendimentos)")
-    rows_rec = []
-    for item in ESTRUTURA_RECEITAS:
-        row_dict = {"Item": item}
-        for mes_t in meses_visiveis:
-            df_item = get_projecao(pessoa, "RECEITA", mes_t)
-            val = df_item[df_item['item'] == item]['valor']
-            row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
-        rows_rec.append(row_dict)
-    
-    row_total_rec = {"Item": "➕ Total Receitas do Mês"}
-    for mes_t in meses_visiveis:
-        soma_rec = sum(safe_float(r.get(mes_t)) for r in rows_rec)
-        row_total_rec[mes_t] = soma_rec
-    rows_rec.append(row_total_rec)
-
-    df_rec_grid = pd.DataFrame(rows_rec)
-    
-    conf_rec = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
-    conf_rec["Item"] = st.column_config.TextColumn("Item / Descrição", disabled=True)
-
-    df_rec_edit = st.data_editor(
-        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=190,
-        column_config=conf_rec
-    )
-    st.session_state[f"rec_{p_code}_df"] = df_rec_edit
-
-    st.divider()
-
-    st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
-    
-    mes_b_atual = mes_tela_para_banco(mes_atual)
-    st_match = df_status_all[(df_status_all['pessoa'] == pessoa) & (df_status_all['mes_ano'] == mes_b_atual)] if not df_status_all.empty else pd.DataFrame()
-    is_closed_db = bool(st_match['fechada'].iloc[0]) if not st_match.empty else False
-    
-    key_chk = f"chk_fat_{p_code}_{mes_atual}"
-    if key_chk not in st.session_state:
-        st.session_state[key_chk] = is_closed_db
-
-    chk_fechada = st.checkbox(
-        f"✅ Fatura de {mes_atual} Fechada / Processada (Desliga Provisões de {pessoa})", 
-        key=key_chk
-    )
-    
-    if chk_fechada != is_closed_db:
-        salvar_status_fatura(pessoa, mes_atual, chk_fechada)
-        st.cache_data.clear()
-        st.rerun()
-
-    cartoes_salvos = df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
-    lista_cartoes_limpa = [c for c in cartoes_salvos if "Total" not in c and c not in ESTRUTURA_CARTÕES_BASE[pessoa]]
-    lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + lista_cartoes_limpa))
-
-    rows_cart = []
-    for item in lista_cartoes_final:
-        row_dict = {"Item": item}
-        for mes_t in meses_visiveis:
-            df_cart_db = get_projecao(pessoa, "CARTAO", mes_t)
-            val = df_cart_db[df_cart_db['item'] == item]['valor']
-            row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
-        rows_cart.append(row_dict)
+    with col_rapido_p2:
+        st.subheader("💳 Atualização Rápida — Pessoa 2 (Marcella)")
+        cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
         
-    row_total_cart = {"Item": "💳 Total Cartões do Mês"}
-    for mes_t in meses_visiveis:
-        soma_cart = sum(safe_float(c.get(mes_t)) for c in rows_cart)
-        row_total_cart[mes_t] = soma_cart
-    rows_cart.append(row_total_cart)
-
-    df_cart_grid = pd.DataFrame(rows_cart)
-    
-    conf_cart = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
-    conf_cart["Item"] = st.column_config.TextColumn("Cartão", disabled=True)
-
-    df_cart_edit = st.data_editor(
-        df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=220,
-        column_config=conf_cart
-    )
-    st.session_state[f"cart_{p_code}_df"] = df_cart_edit
-
-    st.divider()
-
-    st.subheader("🔮 3. Lançamentos Programados no Cartão (Seguros / Assinaturas Futuras)")
-    df_prog_cart = get_programado_cartao(pessoa)
-    df_prog_edit = st.data_editor(
-        df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}", height=150,
-        column_config={
-            "cartao": st.column_config.SelectboxColumn("Cartão", options=lista_cartoes_final),
-            "descricao": st.column_config.TextColumn("Descrição (ex: Seguro, Netflix)"),
-            "valor": st.column_config.NumberColumn("Valor Previsto (R$)", format="R$ %.2f", min_value=0.0)
-        }
-    )
-    st.session_state[f"prog_{p_code}_df"] = df_prog_edit
-
-    st.divider()
-
-    st.subheader("📌 4. Gastos Fixos Individuais Recorrentes")
-    df_fixos_db = get_fixos(pessoa)
-    df_fixos_edit = st.data_editor(
-        df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}", height=150,
-        column_config={
-            "item": st.column_config.TextColumn("Descrição do Gasto Fixo Individual"),
-            "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0)
-        }
-    )
-    st.session_state[f"fix_{p_code}_df"] = df_fixos_edit
-
-    st.divider()
-
-    st.subheader("💸 5. Extrato de Gastos Esporádicos (PIX / Dinheiro)")
-    pontuais_p = df_pontuais_all[(df_pontuais_all['pessoa'] == pessoa) & (df_pontuais_all['mes_ano'] == mes_b_atual)] if not df_pontuais_all.empty else pd.DataFrame()
-    
-    if not pontuais_p.empty:
-        for _, g in pontuais_p.iterrows():
-            c_g1, c_g2, c_g3, c_g4 = st.columns([4, 3, 3, 1])
-            c_g1.write(f"**{g['descricao']}**")
-            c_g2.write(f"🏷️ {g['categoria']}")
-            c_g3.write(f"**R$ {safe_float(g['valor']):,.2f}**")
-            if c_g4.button("🗑️", key=f"del_{g['id']}"):
-                deletar_gasto_pontual(g['id'])
+        with st.form("form_rapido_p2"):
+            st.markdown(f"**Faturas de Cartão ({mes_atual})**")
+            valores_p2 = {}
+            for cartao in cartoes_p2:
+                df_c = get_projecao("Pessoa 2", "CARTAO", mes_atual)
+                val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
+                valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{cartao}")
+            
+            btn_save_p2 = st.form_submit_button("💾 Salvar Cartões da Pessoa 2", type="primary", use_container_width=True)
+            if btn_save_p2:
+                for cartao, val in valores_p2.items():
+                    salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
+                st.success("Cartões da Pessoa 2 atualizados com sucesso!")
                 st.rerun()
-    else:
-        st.info("Nenhum gasto em PIX/dinheiro registrado para este mês.")
-
-with tab_p1:
-    renderizar_pessoa("Pessoa 1", "p1")
-
-with tab_p2:
-    renderizar_pessoa("Pessoa 2", "p2")
-
-with tab_comuns:
-    st.header("🏡 Despesas Comuns do Casal / Casa")
-    df_comuns_edit = st.data_editor(
-        df_comuns_all, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
-        column_config={
-            "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
-            "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0),
-            "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
-        }
-    )
-    st.session_state["comuns_df"] = df_comuns_edit
-
-with tab_consolidado:
-    st.header("🏠 Visão Consolidada, Caixinha & Totais")
-    
-    st.subheader("📦 Caixinha de Reserva da Família (Acumulativa)")
-    
-    rows_caixinha = []
-    acumulado_total_geral = 0.0
-    acumulado_por_mes = {}
-    
-    for m_item in TODOS_MESES_TELA:
-        val_db = df_caixinha_all[df_caixinha_all['mes_ano'] == mes_tela_para_banco(m_item)]['valor'] if not df_caixinha_all.empty else pd.Series()
-        val_aporte = safe_float(val_db.iloc[0]) if not val_db.empty else 0.0
-        acumulado_total_geral += val_aporte
-        acumulado_por_mes[m_item] = acumulado_total_geral
-
-    for mes_t in meses_visiveis:
-        val = df_caixinha_all[df_caixinha_all['mes_ano'] == mes_tela_para_banco(mes_t)]['valor'] if not df_caixinha_all.empty else pd.Series()
-        val_aporte = safe_float(val.iloc[0]) if not val.empty else 0.0
-        total_ate_mes = acumulado_por_mes.get(mes_t, 0.0)
-        
-        rows_caixinha.append({
-            "Mês": mes_t, 
-            "Aporte do Mês (R$)": val_aporte,
-            "Total Acumulado na Caixinha (R$)": total_ate_mes
-        })
-        
-    df_caixinha_grid = pd.DataFrame(rows_caixinha)
-    df_caixinha_edit = st.data_editor(
-        df_caixinha_grid, num_rows="fixed", use_container_width=True, key="caixinha_editor", height=200,
-        column_config={
-            "Mês": st.column_config.TextColumn("Mês", disabled=True),
-            "Aporte do Mês (R$)": st.column_config.NumberColumn("Aporte do Mês (R$)", format="R$ %.2f", min_value=0.0),
-            "Total Acumulado na Caixinha (R$)": st.column_config.NumberColumn("Total Acumulado na Caixinha (R$)", format="R$ %.2f", disabled=True)
-        }
-    )
-    st.session_state["caixinha_df"] = df_caixinha_edit
 
     st.divider()
 
-    st.subheader("📅 Projeção Evolutiva Mês a Mês & Saldo de Caixa Acumulado")
-    
-    row_sal_ini = {"Métrica": "1. Saldo Inicial em Conta"}
-    row_rec = {"Métrica": "2. Renda Total Família"}
-    row_desp = {"Métrica": "3. Saídas Totais (Cartão + Fixos + PIX)"}
-    row_caixinha = {"Métrica": "4. Aporte Caixinha (Mês)"}
-    row_sobra_mes = {"Métrica": "5. Sobra Líquida Isolada do Mês"}
-    row_sal_fim = {"Métrica": "6. Saldo Final Conta (Corrente - Disponível)"}
-    row_reserva_acum = {"Métrica": "7. Caixinha Acumulada (Reserva Separada)"}
-    row_patrimonio = {"Métrica": "8. Patrimônio Total Geral (Conta + Caixinha)"}
+    # REGISTRO RÁPIDO DE PIX / DINHEIRO
+    with st.expander("➕ **Adicionar Gasto Rápido no Mês Atual (PIX / Dinheiro)**", expanded=True):
+        with st.form("form_gasto_rapido_fast", clear_on_submit=True):
+            c_f1, c_f2 = st.columns(2)
+            with c_f1:
+                desc = st.text_input("Descrição (ex: Feira, Farmácia, Uber)", placeholder="Digite a descrição...")
+                val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
+            with c_f2:
+                pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
+                cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
+                
+            btn_salvar_gasto = st.form_submit_button("💾 Registrar Gasto Esporádico", type="primary", use_container_width=True)
+            
+            if btn_salvar_gasto:
+                if not desc.strip():
+                    st.error("Por favor, preencha a descrição do gasto.")
+                else:
+                    inserir_gasto_rapido(mes_atual, pessoa, desc, cat, val)
+                    st.success("Gasto registrado com sucesso!")
+                    st.rerun()
 
-    for m_t in meses_visiveis:
-        d = dados_financeiros.get(m_t, {
-            "saldo_anterior": 0.0, "renda_mes": 0.0, "saidas_mes": 0.0,
-            "caixinha_mes": 0.0, "caixinha_acumulada": 0.0, "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0,
-            "patrimonio_total_final": 0.0
-        })
-        row_sal_ini[m_t] = d["saldo_anterior"]
-        row_rec[m_t] = d["renda_mes"]
-        row_desp[m_t] = d["saidas_mes"] - d["caixinha_mes"]
-        row_caixinha[m_t] = d["caixinha_mes"]
-        row_sobra_mes[m_t] = d["sobra_mes_isolada"]
-        row_sal_fim[m_t] = d["saldo_acumulado_final"]
-        row_reserva_acum[m_t] = d["caixinha_acumulada"]
-        row_patrimonio[m_t] = d["patrimonio_total_final"]
+# ====================================================================
+# SEÇÃO 2: PROJEÇÃO COMPLETA & LONGO PRAZO (O SEU PAINEL ORIGINAL)
+# ====================================================================
+else:
+    # PAINEL RESUMO MENSAL
+    st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
 
-    df_resumo = pd.DataFrame([
-        row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
+    s_final = d_foco['saldo_acumulado_final']
+    caixinha_acum = d_foco['caixinha_acumulada']
+    patrimonio_final = d_foco['patrimonio_total_final']
+    delta_class = "delta-positive" if patrimonio_final >= 0 else "delta-negative"
+    delta_label = "↑ Positivo" if patrimonio_final >= 0 else "↓ Déficit"
+
+    st.markdown(f"""
+        <div class="metrics-container">
+            <div class="metric-card">
+                <div class="metric-label">1. Saldo Inicial em Conta</div>
+                <div class="metric-value">R$ {d_foco['saldo_anterior']:,.2f}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">2. Renda Total Família</div>
+                <div class="metric-value">R$ {d_foco['renda_mes']:,.2f}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">3. Saídas Totais (Geral)</div>
+                <div class="metric-value">R$ {d_foco['saidas_mes']:,.2f}</div>
+            </div>
+            <div class="metric-card-reserva">
+                <div class="metric-label" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</div>
+                <div class="metric-value" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">5. Saldo Corrente em Conta</div>
+                <div class="metric-value">R$ {s_final:,.2f}</div>
+                <div class="{delta_class}">{delta_label} (Disponível)</div>
+            </div>
+        </div>
+        
+        <div class="metrics-container">
+            <div class="metric-card" style="border: 1px dashed #64748b; background-color: #0f172a;">
+                <div class="metric-label">💰 Patrimônio Total Geral (Conta + Caixinha)</div>
+                <div class="metric-value" style="color: #fACC15;">R$ {patrimonio_final:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 1 (Lucas) - Renda</div>
+                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 1 (Lucas) - Gastos Próprios</div>
+                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 2 (Marcella) - Renda</div>
+                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 2 (Marcella) - Gastos Próprios</div>
+                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.divider()
+
+    tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
+        "👤 Pessoa 1 (Lucas)", 
+        "👤 Pessoa 2 (Marcella)", 
+        "🏡 Despesas Comuns (Casa/Aluguel)",
+        "🏠 Visão Consolidada & Caixinha"
     ])
-    
-    cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
-    st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=280)
+
+    def renderizar_pessoa(pessoa, p_code):
+        st.subheader("💵 1. Receitas (Salário e Rendimentos)")
+        rows_rec = []
+        for item in ESTRUTURA_RECEITAS:
+            row_dict = {"Item": item}
+            for mes_t in meses_visiveis:
+                df_item = get_projecao(pessoa, "RECEITA", mes_t)
+                val = df_item[df_item['item'] == item]['valor']
+                row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
+            rows_rec.append(row_dict)
+        
+        row_total_rec = {"Item": "➕ Total Receitas do Mês"}
+        for mes_t in meses_visiveis:
+            soma_rec = sum(safe_float(r.get(mes_t)) for r in rows_rec)
+            row_total_rec[mes_t] = soma_rec
+        rows_rec.append(row_total_rec)
+
+        df_rec_grid = pd.DataFrame(rows_rec)
+        
+        conf_rec = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
+        conf_rec["Item"] = st.column_config.TextColumn("Item / Descrição", disabled=True)
+
+        df_rec_edit = st.data_editor(
+            df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=190,
+            column_config=conf_rec
+        )
+        st.session_state[f"rec_{p_code}_df"] = df_rec_edit
+
+        st.divider()
+
+        st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
+        
+        mes_b_atual = mes_tela_para_banco(mes_atual)
+        st_match = df_status_all[(df_status_all['pessoa'] == pessoa) & (df_status_all['mes_ano'] == mes_b_atual)] if not df_status_all.empty else pd.DataFrame()
+        is_closed_db = bool(st_match['fechada'].iloc[0]) if not st_match.empty else False
+        
+        key_chk = f"chk_fat_{p_code}_{mes_atual}"
+        if key_chk not in st.session_state:
+            st.session_state[key_chk] = is_closed_db
+
+        chk_fechada = st.checkbox(
+            f"✅ Fatura de {mes_atual} Fechada / Processada (Desliga Provisões de {pessoa})", 
+            key=key_chk
+        )
+        
+        if chk_fechada != is_closed_db:
+            salvar_status_fatura(pessoa, mes_atual, chk_fechada)
+            st.cache_data.clear()
+            st.rerun()
+
+        cartoes_salvos = df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
+        lista_cartoes_limpa = [c for c in cartoes_salvos if "Total" not in c and c not in ESTRUTURA_CARTÕES_BASE[pessoa]]
+        lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + lista_cartoes_limpa))
+
+        rows_cart = []
+        for item in lista_cartoes_final:
+            row_dict = {"Item": item}
+            for mes_t in meses_visiveis:
+                df_cart_db = get_projecao(pessoa, "CARTAO", mes_t)
+                val = df_cart_db[df_cart_db['item'] == item]['valor']
+                row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
+            rows_cart.append(row_dict)
+            
+        row_total_cart = {"Item": "💳 Total Cartões do Mês"}
+        for mes_t in meses_visiveis:
+            soma_cart = sum(safe_float(c.get(mes_t)) for c in rows_cart)
+            row_total_cart[mes_t] = soma_cart
+        rows_cart.append(row_total_cart)
+
+        df_cart_grid = pd.DataFrame(rows_cart)
+        
+        conf_cart = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
+        conf_cart["Item"] = st.column_config.TextColumn("Cartão", disabled=True)
+
+        df_cart_edit = st.data_editor(
+            df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=220,
+            column_config=conf_cart
+        )
+        st.session_state[f"cart_{p_code}_df"] = df_cart_edit
+
+        st.divider()
+
+        st.subheader("🔮 3. Lançamentos Programados no Cartão (Seguros / Assinaturas Futuras)")
+        df_prog_cart = get_programado_cartao(pessoa)
+        df_prog_edit = st.data_editor(
+            df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}", height=150,
+            column_config={
+                "cartao": st.column_config.SelectboxColumn("Cartão", options=lista_cartoes_final),
+                "descricao": st.column_config.TextColumn("Descrição (ex: Seguro, Netflix)"),
+                "valor": st.column_config.NumberColumn("Valor Previsto (R$)", format="R$ %.2f", min_value=0.0)
+            }
+        )
+        st.session_state[f"prog_{p_code}_df"] = df_prog_edit
+
+        st.divider()
+
+        st.subheader("📌 4. Gastos Fixos Individuais Recorrentes")
+        df_fixos_db = get_fixos(pessoa)
+        df_fixos_edit = st.data_editor(
+            df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}", height=150,
+            column_config={
+                "item": st.column_config.TextColumn("Descrição do Gasto Fixo Individual"),
+                "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0)
+            }
+        )
+        st.session_state[f"fix_{p_code}_df"] = df_fixos_edit
+
+        st.divider()
+
+        st.subheader("💸 5. Extrato de Gastos Esporádicos (PIX / Dinheiro)")
+        pontuais_p = df_pontuais_all[(df_pontuais_all['pessoa'] == pessoa) & (df_pontuais_all['mes_ano'] == mes_b_atual)] if not df_pontuais_all.empty else pd.DataFrame()
+        
+        if not pontuais_p.empty:
+            for _, g in pontuais_p.iterrows():
+                c_g1, c_g2, c_g3, c_g4 = st.columns([4, 3, 3, 1])
+                c_g1.write(f"**{g['descricao']}**")
+                c_g2.write(f"🏷️ {g['categoria']}")
+                c_g3.write(f"**R$ {safe_float(g['valor']):,.2f}**")
+                if c_g4.button("🗑️", key=f"del_{g['id']}"):
+                    deletar_gasto_pontual(g['id'])
+                    st.rerun()
+        else:
+            st.info("Nenhum gasto em PIX/dinheiro registrado para este mês.")
+
+    with tab_p1:
+        renderizar_pessoa("Pessoa 1", "p1")
+
+    with tab_p2:
+        renderizar_pessoa("Pessoa 2", "p2")
+
+    with tab_comuns:
+        st.header("🏡 Despesas Comuns do Casal / Casa")
+        df_comuns_edit = st.data_editor(
+            df_comuns_all, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
+            column_config={
+                "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
+                "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0),
+                "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
+            }
+        )
+        st.session_state["comuns_df"] = df_comuns_edit
+
+    with tab_consolidado:
+        st.header("🏠 Visão Consolidada, Caixinha & Totais")
+        
+        st.subheader("📦 Caixinha de Reserva da Família (Acumulativa)")
+        
+        rows_caixinha = []
+        acumulado_total_geral = 0.0
+        acumulado_por_mes = {}
+        
+        for m_item in TODOS_MESES_TELA:
+            val_db = df_caixinha_all[df_caixinha_all['mes_ano'] == mes_tela_para_banco(m_item)]['valor'] if not df_caixinha_all.empty else pd.Series()
+            val_aporte = safe_float(val_db.iloc[0]) if not val_db.empty else 0.0
+            acumulado_total_geral += val_aporte
+            acumulado_por_mes[m_item] = acumulado_total_geral
+
+        for mes_t in meses_visiveis:
+            val = df_caixinha_all[df_caixinha_all['mes_ano'] == mes_tela_para_banco(mes_t)]['valor'] if not df_caixinha_all.empty else pd.Series()
+            val_aporte = safe_float(val.iloc[0]) if not val.empty else 0.0
+            total_ate_mes = acumulado_por_mes.get(mes_t, 0.0)
+            
+            rows_caixinha.append({
+                "Mês": mes_t, 
+                "Aporte do Mês (R$)": val_aporte,
+                "Total Acumulado na Caixinha (R$)": total_ate_mes
+            })
+            
+        df_caixinha_grid = pd.DataFrame(rows_caixinha)
+        df_caixinha_edit = st.data_editor(
+            df_caixinha_grid, num_rows="fixed", use_container_width=True, key="caixinha_editor", height=200,
+            column_config={
+                "Mês": st.column_config.TextColumn("Mês", disabled=True),
+                "Aporte do Mês (R$)": st.column_config.NumberColumn("Aporte do Mês (R$)", format="R$ %.2f", min_value=0.0),
+                "Total Acumulado na Caixinha (R$)": st.column_config.NumberColumn("Total Acumulado na Caixinha (R$)", format="R$ %.2f", disabled=True)
+            }
+        )
+        st.session_state["caixinha_df"] = df_caixinha_edit
+
+        st.divider()
+
+        st.subheader("📅 Projeção Evolutiva Mês a Mês & Saldo de Caixa Acumulado")
+        
+        row_sal_ini = {"Métrica": "1. Saldo Inicial em Conta"}
+        row_rec = {"Métrica": "2. Renda Total Família"}
+        row_desp = {"Métrica": "3. Saídas Totais (Cartão + Fixos + PIX)"}
+        row_caixinha = {"Métrica": "4. Aporte Caixinha (Mês)"}
+        row_sobra_mes = {"Métrica": "5. Sobra Líquida Isolada do Mês"}
+        row_sal_fim = {"Métrica": "6. Saldo Final Conta (Corrente - Disponível)"}
+        row_reserva_acum = {"Métrica": "7. Caixinha Acumulada (Reserva Separada)"}
+        row_patrimonio = {"Métrica": "8. Patrimônio Total Geral (Conta + Caixinha)"}
+
+        for m_t in meses_visiveis:
+            d = dados_financeiros.get(m_t, {
+                "saldo_anterior": 0.0, "renda_mes": 0.0, "saidas_mes": 0.0,
+                "caixinha_mes": 0.0, "caixinha_acumulada": 0.0, "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0,
+                "patrimonio_total_final": 0.0
+            })
+            row_sal_ini[m_t] = d["saldo_anterior"]
+            row_rec[m_t] = d["renda_mes"]
+            row_desp[m_t] = d["saidas_mes"] - d["caixinha_mes"]
+            row_caixinha[m_t] = d["caixinha_mes"]
+            row_sobra_mes[m_t] = d["sobra_mes_isolada"]
+            row_sal_fim[m_t] = d["saldo_acumulado_final"]
+            row_reserva_acum[m_t] = d["caixinha_acumulada"]
+            row_patrimonio[m_t] = d["patrimonio_total_final"]
+
+        df_resumo = pd.DataFrame([
+            row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
+        ])
+        
+        cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
+        st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=280)
