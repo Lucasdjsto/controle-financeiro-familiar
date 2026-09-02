@@ -294,7 +294,7 @@ def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
             item = str(row['Item'])
-            if item.startswith("Total"):
+            if "Total" in item:
                 continue
             for mes_t in meses_visiveis:
                 mes_b = mes_tela_para_banco(mes_t)
@@ -410,14 +410,12 @@ def calcular_sequencia_financeira():
     for m_b in meses_banco_seq:
         m_t = mes_banco_para_tela(m_b)
 
-        # Soma estritamente apenas os itens válidos de receita permitidos
         r_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         renda_mes = r_p1 + r_p2
 
-        # Soma estritamente apenas os cartões válidos cadastrados
-        cartoes_p1_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 1"] + df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
-        cartoes_p2_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 2"] + df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
+        cartoes_p1_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 1"] + [c for c in df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist() if c not in ESTRUTURA_CARTÕES_BASE["Pessoa 1"]]
+        cartoes_p2_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 2"] + [c for c in df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist() if c not in ESTRUTURA_CARTÕES_BASE["Pessoa 2"]]
 
         c_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p1_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         c_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p2_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
@@ -668,7 +666,8 @@ def renderizar_pessoa(pessoa, p_code):
         st.rerun()
 
     cartoes_salvos = df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
-    lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + cartoes_salvos))
+    # Remove duplicatas preservando a ordem limpa
+    lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + [c for c in cartoes_salvos if c not in ESTRUTURA_CARTÕES_BASE[pessoa]]))
 
     rows_cart = []
     for item in lista_cartoes_final:
