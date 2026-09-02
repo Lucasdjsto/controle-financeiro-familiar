@@ -386,7 +386,7 @@ def salvar_programado_cartao(pessoa, df_editado):
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
 
-# 9. LÓGICA DE CÁLCULO FINANCEIRO OTIMIZADA
+# 9. LÓGICA DE CÁLCULO FINANCEIRO OTIMIZADA E RIGOROSA
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
@@ -410,12 +410,17 @@ def calcular_sequencia_financeira():
     for m_b in meses_banco_seq:
         m_t = mes_banco_para_tela(m_b)
 
-        r_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
-        r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+        # Soma estritamente apenas os itens válidos de receita permitidos
+        r_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+        r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         renda_mes = r_p1 + r_p2
 
-        c_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
-        c_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO')]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+        # Soma estritamente apenas os cartões válidos cadastrados
+        cartoes_p1_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 1"] + df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
+        cartoes_p2_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 2"] + df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
+
+        c_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p1_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+        c_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p2_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         
         f1_fechada = False
         f2_fechada = False
@@ -662,7 +667,6 @@ def renderizar_pessoa(pessoa, p_code):
         st.cache_data.clear()
         st.rerun()
 
-    # Descobre dinamicamente todos os cartões cadastrados (padrão + salvos no banco)
     cartoes_salvos = df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
     lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + cartoes_salvos))
 
