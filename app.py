@@ -523,18 +523,25 @@ st.divider()
 # CONTROLES TEMPORAIS
 idx_padrao = TODOS_MESES_TELA.index("09.2026") if "09.2026" in TODOS_MESES_TELA else 0
 
-col_m1, col_m2 = st.columns([7, 3])
-with col_m1:
+if modo_visao.startswith("⚡"):
+    # No modo rápido, exibe apenas o seletor do mês de referência (sem seletor de 6/12 meses)
     mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
     st.session_state["mes_atual_sel"] = mes_atual
-with col_m2:
-    modo_exibicao = st.selectbox("Horizonte:", ["6 Meses", "12 Meses"], index=0, label_visibility="collapsed")
-
-idx_foco = TODOS_MESES_TELA.index(mes_atual)
-qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
-
-meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
-st.session_state["meses_v"] = meses_visiveis
+    meses_visiveis = [mes_atual]
+    st.session_state["meses_v"] = meses_visiveis
+else:
+    # Na projeção de longo prazo, exibe mês de referência e o horizonte de meses
+    col_m1, col_m2 = st.columns([7, 3])
+    with col_m1:
+        mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
+        st.session_state["mes_atual_sel"] = mes_atual
+    with col_m2:
+        modo_exibicao = st.selectbox("Horizonte:", ["6 Meses", "12 Meses"], index=0, label_visibility="collapsed")
+    
+    idx_foco = TODOS_MESES_TELA.index(mes_atual)
+    qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
+    meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
+    st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros.get(mes_atual, {
     "saldo_anterior": 0.0, "renda_mes": 0.0, "renda_p1": 0.0, "renda_p2": 0.0,
