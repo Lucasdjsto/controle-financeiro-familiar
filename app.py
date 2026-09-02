@@ -28,7 +28,7 @@ st.markdown("""
         .metrics-container-compact {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 4px;
             width: 100%;
             margin-bottom: 0.5rem;
         }
@@ -40,7 +40,7 @@ st.markdown("""
             background-color: #111827;
             border: 1px solid #1f2937;
             border-radius: 6px;
-            padding: 6px 10px;
+            padding: 5px 8px;
         }
 
         .metric-row-reserva {
@@ -50,7 +50,7 @@ st.markdown("""
             background-color: #0c2340;
             border: 1px solid #0284c7;
             border-radius: 6px;
-            padding: 6px 10px;
+            padding: 5px 8px;
         }
 
         .metric-row-final {
@@ -60,23 +60,23 @@ st.markdown("""
             background-color: #1e1b4b;
             border: 1px solid #6366f1;
             border-radius: 6px;
-            padding: 6px 10px;
+            padding: 5px 8px;
         }
         
         .metric-label-compact {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: #9ca3af;
             font-weight: 500;
         }
         
         .metric-value-compact {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 700;
             color: #f3f4f6;
         }
         
-        .delta-positive { color: #4ade80; font-size: 0.7rem; font-weight: 600; }
-        .delta-negative { color: #f87171; font-size: 0.7rem; font-weight: 600; }
+        .delta-positive { color: #4ade80; font-size: 0.65rem; font-weight: 600; }
+        .delta-negative { color: #f87171; font-size: 0.65rem; font-weight: 600; }
 
         .stButton > button {
             border-radius: 6px;
@@ -349,11 +349,6 @@ def salvar_status_fatura(pessoa, mes_tela, fechada):
         '''
         conn.execute(text(query), {"pessoa": pessoa, "mes_ano": mes_b, "fechada": fechada})
 
-def resetar_todos_status_faturas():
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM status_faturas;"))
-    st.cache_data.clear()
-
 def inserir_gasto_rapido(mes_tela, pessoa, descricao, categoria, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -484,7 +479,7 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO SUPER COMPACTO
+# 10. CABEÇALHO COMPACTO
 col_h1, col_h2, col_h3 = st.columns([5, 3, 2])
 with col_h1:
     st.markdown("### 📊 Painel Financeiro")
@@ -524,13 +519,11 @@ st.divider()
 idx_padrao = TODOS_MESES_TELA.index("09.2026") if "09.2026" in TODOS_MESES_TELA else 0
 
 if modo_visao.startswith("⚡"):
-    # No modo rápido, exibe apenas o seletor do mês de referência (sem seletor de 6/12 meses)
     mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
     st.session_state["mes_atual_sel"] = mes_atual
     meses_visiveis = [mes_atual]
     st.session_state["meses_v"] = meses_visiveis
 else:
-    # Na projeção de longo prazo, exibe mês de referência e o horizonte de meses
     col_m1, col_m2 = st.columns([7, 3])
     with col_m1:
         mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
@@ -639,33 +632,73 @@ if modo_visao.startswith("⚡"):
                     st.rerun()
 
 # ====================================================================
-# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (MODO COMPLETO RESTAURADO)
+# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (COM TODOS OS MOSTRADORES REDIMENSIONADOS)
 # ====================================================================
 else:
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
+    patrimonio_total = d_foco['patrimonio_total_final']
+    renda_p1 = d_foco['renda_p1']
+    renda_p2 = d_foco['renda_p2']
+    gasto_p1 = d_foco['gasto_p1']
+    gasto_p2 = d_foco['gasto_p2']
 
+    # Mostradores Compactos de Longo Prazo (Todos restaurados em tamanho menor)
     st.markdown(f"""
         <div class="metrics-container-compact">
-            <div class="metric-row-compact">
-                <span class="metric-label-compact">1. Saldo Inicial</span>
-                <span class="metric-value-compact">R$ {d_foco['saldo_anterior']:,.2f}</span>
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">1. Saldo Inicial</span>
+                    <span class="metric-value-compact">R$ {d_foco['saldo_anterior']:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">2. Renda Total</span>
+                    <span class="metric-value-compact">R$ {d_foco['renda_mes']:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">3. Saídas Totais</span>
+                    <span class="metric-value-compact">R$ {d_foco['saidas_mes']:,.2f}</span>
+                </div>
             </div>
-            <div class="metric-row-compact">
-                <span class="metric-label-compact">2. Renda Total</span>
-                <span class="metric-value-compact">R$ {d_foco['renda_mes']:,.2f}</span>
+            
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-reserva" style="flex:1;">
+                    <span class="metric-label-compact" style="color:#38bdf8;">🔒 4. Caixinha</span>
+                    <span class="metric-value-compact" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+                </div>
+                <div class="metric-row-final" style="flex:1;">
+                    <span class="metric-label-compact" style="color:#a5b4fc;">5. Saldo Conta</span>
+                    <span class="metric-value-compact" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
+                </div>
             </div>
-            <div class="metric-row-compact">
-                <span class="metric-label-compact">3. Saídas Totais</span>
-                <span class="metric-value-compact">R$ {d_foco['saidas_mes']:,.2f}</span>
+
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact" style="color:#fbbf24;">💰 Patrimônio Geral</span>
+                    <span class="metric-value-compact" style="color:#fbbf24;">R$ {patrimonio_total:,.2f}</span>
+                </div>
             </div>
-            <div class="metric-row-reserva">
-                <span class="metric-label-compact" style="color:#38bdf8;">🔒 4. Caixinha</span>
-                <span class="metric-value-compact" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 P1 (Lucas) - Renda</span>
+                    <span class="metric-value-compact">R$ {renda_p1:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 P1 (Lucas) - Gastos</span>
+                    <span class="metric-value-compact">R$ {gasto_p1:,.2f}</span>
+                </div>
             </div>
-            <div class="metric-row-final">
-                <span class="metric-label-compact" style="color:#a5b4fc;">5. Saldo Conta</span>
-                <span class="metric-value-compact" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
+
+            <div style="display: flex; gap: 4px;">
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 P2 (Marcella) - Renda</span>
+                    <span class="metric-value-compact">R$ {renda_p2:,.2f}</span>
+                </div>
+                <div class="metric-row-compact" style="flex:1;">
+                    <span class="metric-label-compact">👤 P2 (Marcella) - Gastos</span>
+                    <span class="metric-value-compact">R$ {gasto_p2:,.2f}</span>
+                </div>
             </div>
         </div>
     """, unsafe_allow_html=True)
