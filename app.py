@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Otimizado para Mobile (Modo Compacto e Discreto)
+# 2. Injeção de CSS Otimizado para Mobile (Fontes menores e design discreto)
 st.markdown("""
     <style>
         .block-container {
@@ -25,11 +25,10 @@ st.markdown("""
             padding: 2px 4px !important;
         }
         
-        /* Cards de Resumo Discretos e Compactos */
         .metrics-container-compact {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 5px;
             width: 100%;
             margin-bottom: 0.5rem;
         }
@@ -41,7 +40,7 @@ st.markdown("""
             background-color: #111827;
             border: 1px solid #1f2937;
             border-radius: 6px;
-            padding: 8px 12px;
+            padding: 6px 10px;
         }
 
         .metric-row-reserva {
@@ -51,7 +50,7 @@ st.markdown("""
             background-color: #0c2340;
             border: 1px solid #0284c7;
             border-radius: 6px;
-            padding: 8px 12px;
+            padding: 6px 10px;
         }
 
         .metric-row-final {
@@ -61,7 +60,7 @@ st.markdown("""
             background-color: #1e1b4b;
             border: 1px solid #6366f1;
             border-radius: 6px;
-            padding: 8px 12px;
+            padding: 6px 10px;
         }
         
         .metric-label-compact {
@@ -71,7 +70,7 @@ st.markdown("""
         }
         
         .metric-value-compact {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             font-weight: 700;
             color: #f3f4f6;
         }
@@ -485,12 +484,12 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO SUPER COMPACTO (MOBILE FRIENDLY)
+# 10. CABEÇALHO SUPER COMPACTO
 col_h1, col_h2, col_h3 = st.columns([5, 3, 2])
 with col_h1:
     st.markdown("### 📊 Painel Financeiro")
 with col_h2:
-    if st.button("💾 Salvar Projeção", use_container_width=True):
+    if st.button("💾 Salvar", use_container_width=True):
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
         if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
         if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"])
@@ -504,7 +503,7 @@ with col_h2:
         if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"])
         if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"])
         st.cache_data.clear()
-        st.success("Salvo!")
+        st.success("Salvo com sucesso!")
         st.rerun()
 with col_h3:
     if st.button("🚪 Sair", use_container_width=True):
@@ -521,7 +520,7 @@ modo_visao = st.radio(
 
 st.divider()
 
-# CONTROLES TEMPORAIS (Exibe seletor de mês apenas no modo rápido ou global)
+# CONTROLES TEMPORAIS
 idx_padrao = TODOS_MESES_TELA.index("09.2026") if "09.2026" in TODOS_MESES_TELA else 0
 
 col_m1, col_m2 = st.columns([7, 3])
@@ -529,10 +528,7 @@ with col_m1:
     mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
     st.session_state["mes_atual_sel"] = mes_atual
 with col_m2:
-    if modo_visao.startswith("📈"):
-        modo_exibicao = st.selectbox("Horizonte:", ["6 Meses", "12 Meses"], index=0, label_visibility="collapsed")
-    else:
-        modo_exibicao = "6 Meses"
+    modo_exibicao = st.selectbox("Horizonte:", ["6 Meses", "12 Meses"], index=0, label_visibility="collapsed")
 
 idx_foco = TODOS_MESES_TELA.index(mes_atual)
 qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
@@ -548,14 +544,12 @@ d_foco = dados_financeiros.get(mes_atual, {
 })
 
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO (LIMPO, SEM POLUIÇÃO E DISCRETO)
+# SEÇÃO 1: MODO RÁPIDO
 # ====================================================================
 if modo_visao.startswith("⚡"):
     
-    # 5 CARDS DE RESUMO DISCRETOS (Estilo Lista Vertical Compacta)
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
-    patrimonio_final = d_foco['patrimonio_total_final']
     delta_class = "delta-positive" if s_final >= 0 else "delta-negative"
     delta_txt = "Positivo" if s_final >= 0 else "Déficit"
 
@@ -586,52 +580,42 @@ if modo_visao.startswith("⚡"):
 
     st.divider()
 
-    # FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA DE CARTÕES
-    col_rapido_p1, col_rapido_p2 = st.columns(1)
-
-    with st.container():
-        st.subheader(f"💳 Cartões — Pessoa 1 (Lucas)")
-        cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
+    st.subheader(f"💳 Cartões — Pessoa 1 (Lucas)")
+    cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
+    with st.form(f"form_rapido_p1_{mes_atual}"):
+        valores_p1 = {}
+        for cartao in cartoes_p1:
+            df_c = get_projecao("Pessoa 1", "CARTAO", mes_atual)
+            val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
+            valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{mes_atual}_{cartao}")
         
-        with st.form(f"form_rapido_p1_{mes_atual}"):
-            valores_p1 = {}
-            for cartao in cartoes_p1:
-                df_c = get_projecao("Pessoa 1", "CARTAO", mes_atual)
-                val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
-                valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{mes_atual}_{cartao}")
-            
-            btn_save_p1 = st.form_submit_button(f"💾 Salvar Cartões P1 ({mes_atual})", type="primary", use_container_width=True)
-            if btn_save_p1:
-                for cartao, val in valores_p1.items():
-                    salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
-                st.cache_data.clear()
-                st.success(f"Salvo!")
-                st.rerun()
+        if st.form_submit_button(f"💾 Salvar Cartões P1 ({mes_atual})", type="primary", use_container_width=True):
+            for cartao, val in valores_p1.items():
+                salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
+            st.cache_data.clear()
+            st.success("Salvo!")
+            st.rerun()
 
     st.write("")
 
-    with st.container():
-        st.subheader(f"💳 Cartões — Pessoa 2 (Marcella)")
-        cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
+    st.subheader(f"💳 Cartões — Pessoa 2 (Marcella)")
+    cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
+    with st.form(f"form_rapido_p2_{mes_atual}"):
+        valores_p2 = {}
+        for cartao in cartoes_p2:
+            df_c = get_projecao("Pessoa 2", "CARTAO", mes_atual)
+            val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
+            valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{mes_atual}_{cartao}")
         
-        with st.form(f"form_rapido_p2_{mes_atual}"):
-            valores_p2 = {}
-            for cartao in cartoes_p2:
-                df_c = get_projecao("Pessoa 2", "CARTAO", mes_atual)
-                val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
-                valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{mes_atual}_{cartao}")
-            
-            btn_save_p2 = st.form_submit_button(f"💾 Salvar Cartões P2 ({mes_atual})", type="primary", use_container_width=True)
-            if btn_save_p2:
-                for cartao, val in valores_p2.items():
-                    salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
-                st.cache_data.clear()
-                st.success(f"Salvo!")
-                st.rerun()
+        if st.form_submit_button(f"💾 Salvar Cartões P2 ({mes_atual})", type="primary", use_container_width=True):
+            for cartao, val in valores_p2.items():
+                salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
+            st.cache_data.clear()
+            st.success("Salvo!")
+            st.rerun()
 
     st.divider()
 
-    # REGISTRO RÁPIDO DE PIX / DINHEIRO
     with st.expander(f"➕ **Adicionar Gasto Rápido ({mes_atual})**", expanded=False):
         with st.form(f"form_gasto_rapido_fast_{mes_atual}", clear_on_submit=True):
             desc = st.text_input("Descrição", placeholder="ex: Feira, Farmácia")
@@ -648,14 +632,11 @@ if modo_visao.startswith("⚡"):
                     st.rerun()
 
 # ====================================================================
-# SEÇÃO 2: PROJEÇÃO COMPLETA & LONGO PRAZO
+# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (MODO COMPLETO RESTAURADO)
 # ====================================================================
 else:
-    st.markdown(f"#### ⚡ Resumo Consolidador - {mes_atual}")
-
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
-    patrimonio_final = d_foco['patrimonio_total_final']
 
     st.markdown(f"""
         <div class="metrics-container-compact">
@@ -757,6 +738,21 @@ else:
             get_fixos(pessoa), num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}", height=130
         )
 
+        st.divider()
+        st.subheader("💸 Gastos Esporádicos")
+        pontuais_p = df_pontuais_all[(df_pontuais_all['pessoa'] == pessoa) & (df_pontuais_all['mes_ano'] == mes_b_atual)] if not df_pontuais_all.empty else pd.DataFrame()
+        if not pontuais_p.empty:
+            for _, g in pontuais_p.iterrows():
+                c_g1, c_g2, c_g3, c_g4 = st.columns([4, 3, 3, 1])
+                c_g1.write(f"**{g['descricao']}**")
+                c_g2.write(f"🏷️ {g['categoria']}")
+                c_g3.write(f"**R$ {safe_float(g['valor']):,.2f}**")
+                if c_g4.button("🗑️", key=f"del_{g['id']}"):
+                    deletar_gasto_pontual(g['id'])
+                    st.rerun()
+        else:
+            st.info("Nenhum gasto esporádico.")
+
     with tab_p1: renderizar_pessoa("Pessoa 1", "p1")
     with tab_p2: renderizar_pessoa("Pessoa 2", "p2")
 
@@ -767,7 +763,7 @@ else:
         )
 
     with tab_consolidado:
-        st.header("🏠 Visão Geral")
+        st.header("🏠 Visão Geral & Caixinha")
         rows_caixinha = []
         acumulado_total_geral = 0.0
         acumulado_por_mes = {}
