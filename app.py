@@ -43,6 +43,16 @@ st.markdown("""
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
+        .metric-card-reserva {
+            background-color: #0f2942;
+            border: 1px solid #38bdf8;
+            border-radius: 8px;
+            padding: 10px 12px;
+            flex: 1 1 calc(20% - 10px);
+            min-width: 160px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
         .metric-card-sub {
             background-color: #0f172a;
             border: 1px dashed #475569;
@@ -76,10 +86,10 @@ st.markdown("""
         }
 
         @media (max-width: 1024px) {
-            .metric-card, .metric-card-sub { flex: 1 1 calc(33.33% - 10px); }
+            .metric-card, .metric-card-reserva, .metric-card-sub { flex: 1 1 calc(33.33% - 10px); }
         }
         @media (max-width: 640px) {
-            .metric-card, .metric-card-sub { flex: 1 1 100%; }
+            .metric-card, .metric-card-reserva, .metric-card-sub { flex: 1 1 100%; }
             .metric-value { font-size: 1.1rem; }
         }
     </style>
@@ -555,10 +565,11 @@ with st.expander("➕ **Registrar Novo Gasto Rápido (PIX / Dinheiro)**", expand
                 st.success("Gasto registrado com sucesso!")
                 st.rerun()
 
-# PAINEL RESUMO MENSAL
+# PAINEL RESUMO MENSAL (Com Caixinha Visualmente Separada)
 st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
 
 s_final = d_foco['saldo_acumulado_final']
+caixinha_acum = d_foco['caixinha_acumulada']
 patrimonio_final = d_foco['patrimonio_total_final']
 delta_class = "delta-positive" if patrimonio_final >= 0 else "delta-negative"
 delta_label = "↑ Positivo" if patrimonio_final >= 0 else "↓ Déficit"
@@ -577,18 +588,22 @@ st.markdown(f"""
             <div class="metric-label">3. Saídas Totais (Geral)</div>
             <div class="metric-value">R$ {d_foco['saidas_mes']:,.2f}</div>
         </div>
-        <div class="metric-card">
-            <div class="metric-label">4. Total Acumulado Caixinha</div>
-            <div class="metric-value">R$ {d_foco['caixinha_acumulada']:,.2f}</div>
+        <div class="metric-card-reserva">
+            <div class="metric-label" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</div>
+            <div class="metric-value" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</div>
         </div>
         <div class="metric-card">
-            <div class="metric-label">5. Patrimônio Total (Conta + Caixinha)</div>
-            <div class="metric-value">R$ {patrimonio_final:,.2f}</div>
-            <div class="{delta_class}">{delta_label}</div>
+            <div class="metric-label">5. Saldo Corrente em Conta</div>
+            <div class="metric-value">R$ {s_final:,.2f}</div>
+            <div class="{delta_class}">{delta_label} (Disponível)</div>
         </div>
     </div>
     
     <div class="metrics-container">
+        <div class="metric-card" style="border: 1px dashed #64748b; background-color: #0f172a;">
+            <div class="metric-label">💰 Patrimônio Total Geral (Conta + Caixinha)</div>
+            <div class="metric-value" style="color: #fACC15;">R$ {patrimonio_final:,.2f}</div>
+        </div>
         <div class="metric-card-sub">
             <div class="metric-label">👤 Pessoa 1 (Lucas) - Renda</div>
             <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</div>
@@ -669,7 +684,6 @@ def renderizar_pessoa(pessoa, p_code):
         st.rerun()
 
     cartoes_salvos = df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
-    # Limpa rigorosamente qualquer item duplicado ou que contenha a palavra Total
     lista_cartoes_limpa = [c for c in cartoes_salvos if "Total" not in c and c not in ESTRUTURA_CARTÕES_BASE[pessoa]]
     lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + lista_cartoes_limpa))
 
@@ -807,13 +821,14 @@ with tab_consolidado:
     row_desp = {"Métrica": "3. Saídas Totais (Cartão + Fixos + PIX)"}
     row_caixinha = {"Métrica": "4. Aporte Caixinha (Mês)"}
     row_sobra_mes = {"Métrica": "5. Sobra Líquida Isolada do Mês"}
-    row_sal_fim = {"Métrica": "6. Saldo Final Conta (Corrente)"}
-    row_patrimonio = {"Métrica": "7. Patrimônio Total (Conta + Caixinha Acumulada)"}
+    row_sal_fim = {"Métrica": "6. Saldo Final Conta (Corrente - Disponível)"}
+    row_reserva_acum = {"Métrica": "7. Caixinha Acumulada (Reserva Separada)"}
+    row_patrimonio = {"Métrica": "8. Patrimônio Total Geral (Conta + Caixinha)"}
 
     for m_t in meses_visiveis:
         d = dados_financeiros.get(m_t, {
             "saldo_anterior": 0.0, "renda_mes": 0.0, "saidas_mes": 0.0,
-            "caixinha_mes": 0.0, "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0,
+            "caixinha_mes": 0.0, "caixinha_acumulada": 0.0, "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0,
             "patrimonio_total_final": 0.0
         })
         row_sal_ini[m_t] = d["saldo_anterior"]
@@ -822,11 +837,12 @@ with tab_consolidado:
         row_caixinha[m_t] = d["caixinha_mes"]
         row_sobra_mes[m_t] = d["sobra_mes_isolada"]
         row_sal_fim[m_t] = d["saldo_acumulado_final"]
+        row_reserva_acum[m_t] = d["caixinha_acumulada"]
         row_patrimonio[m_t] = d["patrimonio_total_final"]
 
     df_resumo = pd.DataFrame([
-        row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_patrimonio
+        row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
     ])
     
     cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
-    st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=250)
+    st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=280)
