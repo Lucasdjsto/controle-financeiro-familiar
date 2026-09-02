@@ -562,13 +562,13 @@ d_foco = dados_financeiros.get(mes_atual, {
 })
 
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO (EXCLUSIVO PARA O DIA A DIA DO MÊS CORRENTE)
+# SEÇÃO 1: MODO RÁPIDO (EXCLUSIVO PARA O DIA A DIAS DO MÊS CORRENTE)
 # ====================================================================
 if modo_visao.startswith("⚡"):
     st.markdown(f"### ⚡ Painel Diário Rápido — Referência: **{mes_atual}**")
     st.info("💡 **Dica:** Os valores exibidos abaixo correspondem exatamente ao mês selecionado acima. Ao alterar e salvar, eles atualizam de imediato o saldo em conta e a projeção de longo prazo.")
 
-    # PAINEL DE RESUMO DO MÊS (5 CARDS)
+    # PAINEL DE RESUMO DO MÊS
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
     patrimonio_final = d_foco['patrimonio_total_final']
@@ -597,6 +597,29 @@ if modo_visao.startswith("⚡"):
                 <div class="metric-label">5. Saldo Corrente em Conta</div>
                 <div class="metric-value">R$ {s_final:,.2f}</div>
                 <div class="{delta_class}">{delta_label} (Disponível)</div>
+            </div>
+        </div>
+        
+        <div class="metrics-container">
+            <div class="metric-card" style="border: 1px dashed #64748b; background-color: #0f172a;">
+                <div class="metric-label">💰 Patrimônio Total Geral (Conta + Caixinha)</div>
+                <div class="metric-value" style="color: #fACC15;">R$ {patrimonio_final:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 1 (Lucas) - Renda</div>
+                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 1 (Lucas) - Gastos Próprios</div>
+                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 2 (Marcella) - Renda</div>
+                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 2 (Marcella) - Gastos Próprios</div>
+                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -703,6 +726,29 @@ else:
                 <div class="metric-label">5. Saldo Corrente em Conta</div>
                 <div class="metric-value">R$ {s_final:,.2f}</div>
                 <div class="{delta_class}">{delta_label} (Disponível)</div>
+            </div>
+        </div>
+        
+        <div class="metrics-container">
+            <div class="metric-card" style="border: 1px dashed #64748b; background-color: #0f172a;">
+                <div class="metric-label">💰 Patrimônio Total Geral (Conta + Caixinha)</div>
+                <div class="metric-value" style="color: #fACC15;">R$ {patrimonio_final:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 1 (Lucas) - Renda</div>
+                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 1 (Lucas) - Gastos Próprios</div>
+                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 2 (Marcella) - Renda</div>
+                <div class="metric-value" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</div>
+            </div>
+            <div class="metric-card-sub">
+                <div class="metric-label">👤 Pessoa 2 (Marcella) - Gastos Próprios</div>
+                <div class="metric-value" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
