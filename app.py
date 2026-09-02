@@ -182,7 +182,7 @@ def get_db_engine():
 
 engine = get_db_engine()
 
-# 5. Inicialização das Tabelas no Banco
+# 5. Inicialização das Tabelas no Banco (incluindo tabela de preferências para a memória)
 def init_db():
     try:
         with engine.begin() as conn:
@@ -245,10 +245,37 @@ def init_db():
                     PRIMARY KEY (pessoa, mes_ano)
                 );
             '''))
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS preferencias (
+                    chave TEXT PRIMARY KEY,
+                    valor TEXT
+                );
+            '''))
     except Exception as e:
         st.error(f"Erro de Conexão com o Banco de Dados: {e}")
 
 init_db()
+
+# Funções de Memória do Último Mês
+def carregar_ultimo_mes_salvo(default="09.2026"):
+    try:
+        with engine.connect() as conn:
+            res = conn.execute(text("SELECT valor FROM preferencias WHERE chave = 'ultimo_mes'")).fetchone()
+            if res and res[0]:
+                return res[0]
+    except:
+        pass
+    return default
+
+def salvar_ultimo_mes_banco(mes_tela):
+    try:
+        with engine.begin() as conn:
+            conn.execute(text('''
+                INSERT INTO preferencias (chave, valor) VALUES ('ultimo_mes', :mes)
+                ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor;
+            '''), {"mes": mes_tela})
+    except:
+        pass
 
 # 6. GERADOR DINÂMICO DE MESES E ESTRUTURAS
 def gerar_linha_tempo_tela(mes_inicio_str="09.2026", quantidade_meses=48):
@@ -318,9 +345,10 @@ def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
             DO UPDATE SET valor = EXCLUDED.valor;
         '''
         conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": safe_float(valor)})
+    salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
 
-def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
+def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
             item = str(row['Item'])
@@ -336,16 +364,18 @@ def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
                     DO UPDATE SET valor = EXCLUDED.valor;
                 '''
                 conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": val})
+    salvar_ultimo_mes_banco(mes_atual_foco)
 
-def salvar_fixos(pessoa, df_editado):
+def salvar_fixos(pessoa, df_editado, mes_atual_foco):
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa"), {"pessoa": pessoa})
         for _, row in df_editado.iterrows():
             if str(row['item']).strip():
                 query = "INSERT INTO gastos_fixos (pessoa, item, valor) VALUES (:pessoa, :item, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "val": safe_float(row['valor'])})
+    salvar_ultimo_mes_banco(mes_atual_foco)
 
-def salvar_comuns(df_editado):
+def salvar_comuns(df_editado, mes_atual_foco):
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM gastos_comuns"))
         for _, row in df_editado.iterrows():
@@ -353,6 +383,7 @@ def salvar_comuns(df_editado):
                 pag = str(row.get('pagador', 'Dividido (50/50)'))
                 query = "INSERT INTO gastos_comuns (item, valor, pagador) VALUES (:item, :val, :pag)"
                 conn.execute(text(query), {"item": str(row['item']), "val": safe_float(row['valor']), "pag": pag})
+    salvar_ultimo_mes_banco(mes_atual_foco)
 
 def salvar_status_fatura(pessoa, mes_tela, fechada):
     mes_b = mes_tela_para_banco(mes_tela)
@@ -364,6 +395,7 @@ def salvar_status_fatura(pessoa, mes_tela, fechada):
             DO UPDATE SET fechada = EXCLUDED.fechada;
         '''
         conn.execute(text(query), {"pessoa": pessoa, "mes_ano": mes_b, "fechada": fechada})
+    salvar_ultimo_mes_banco(mes_tela)
 
 def resetar_todos_status_faturas():
     with engine.begin() as conn:
@@ -384,6 +416,7 @@ def inserir_gasto_rapido(mes_tela, pessoa, descricao, categoria, valor):
             "categoria": categoria,
             "valor": safe_float(valor)
         })
+    salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
 
 def deletar_gasto_pontual(gasto_id):
@@ -391,7 +424,7 @@ def deletar_gasto_pontual(gasto_id):
         conn.execute(text("DELETE FROM pontuais_dinheiro WHERE id = :id"), {"id": gasto_id})
     st.cache_data.clear()
 
-def salvar_caixinha(df_editado):
+def salvar_caixinha(df_editado, mes_atual_foco):
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
             mes_t = row['Mês']
@@ -404,8 +437,9 @@ def salvar_caixinha(df_editado):
                 DO UPDATE SET valor = EXCLUDED.valor;
             '''
             conn.execute(text(query), {"mes": mes_b, "val": val})
+    salvar_ultimo_mes_banco(mes_atual_foco)
 
-def salvar_programado_cartao(pessoa, df_editado):
+def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM programado_cartao WHERE pessoa = :pessoa"), {"pessoa": pessoa})
         for _, row in df_editado.iterrows():
@@ -415,6 +449,7 @@ def salvar_programado_cartao(pessoa, df_editado):
                 val_val = safe_float(row.get('valor'))
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
+    salvar_ultimo_mes_banco(mes_atual_foco)
 
 # 9. LÓGICA DE CÁLCULO FINANCEIRO
 def calcular_sequencia_financeira():
@@ -507,19 +542,21 @@ with col_head:
 
 with col_save_btn:
     if st.button("💾 SALVAR DADOS", type="primary", use_container_width=True):
-        if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
-        if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"])
-        if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"])
-        if "prog_p1_df" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1_df"])
+        mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
+        if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"], mes_foco_atual)
+        if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"], mes_foco_atual)
+        if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"], mes_foco_atual)
+        if "prog_p1_df" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1_df"], mes_foco_atual)
 
-        if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"])
-        if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"])
-        if "fix_p2_df" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2_df"])
-        if "prog_p2_df" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2_df"])
+        if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"], mes_foco_atual)
+        if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"], mes_foco_atual)
+        if "fix_p2_df" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2_df"], mes_foco_atual)
+        if "prog_p2_df" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2_df"], mes_foco_atual)
 
-        if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"])
-        if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"])
+        if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"], mes_foco_atual)
+        if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"], mes_foco_atual)
         
+        salvar_ultimo_mes_banco(mes_foco_atual)
         st.cache_data.clear()
         st.success("Salvo com sucesso!")
         st.rerun()
@@ -539,9 +576,11 @@ modo_visao = st.radio(
 
 st.divider()
 
-# CONTROLES TEMPORAIS (Comportamento condicional para ocultar 6/12M e Reset APENAS do modo rápido)
-idx_padrao = TODOS_MESES_TELA.index("09.2026") if "09.2026" in TODOS_MESES_TELA else 0
+# RECUPERA O ÚLTIMO MÊS SALVO DO BANCO PARA ABRIR NELA
+ultimo_mes_salvo = carregar_ultimo_mes_salvo("09.2026")
+idx_padrao = TODOS_MESES_TELA.index(ultimo_mes_salvo) if ultimo_mes_salvo in TODOS_MESES_TELA else 0
 
+# CONTROLES TEMPORAIS (Comportamento condicional para ocultar 6/12M e Reset APENAS do modo rápido)
 if modo_visao.startswith("⚡"):
     # MODO RÁPIDO: Sem seletor 6/12 meses, sem botão de reset, visibilidade limpa
     mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
@@ -567,6 +606,9 @@ else:
     qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
     meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
     st.session_state["meses_v"] = meses_visiveis
+
+# Sempre que o mês mudar no selectbox, salva a preferência no banco
+salvar_ultimo_mes_banco(mes_atual)
 
 d_foco = dados_financeiros.get(mes_atual, {
     "saldo_anterior": 0.0, "renda_mes": 0.0, "renda_p1": 0.0, "renda_p2": 0.0,
