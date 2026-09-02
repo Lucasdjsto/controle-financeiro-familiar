@@ -436,7 +436,6 @@ def calcular_sequencia_financeira():
         r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         renda_mes = r_p1 + r_p2
 
-        # Força rigorosamente a adoção única dos cartões base corretos, ignorando qualquer duplicata
         cartoes_p1_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
         cartoes_p2_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
 
@@ -563,11 +562,11 @@ d_foco = dados_financeiros.get(mes_atual, {
 })
 
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO (EXCLUSIVO PARA O DIA A DIA DO MÊS CORRENTE)
+# SEÇÃO 1: MODO RÁPIDO (EXCLUSIVO PARA O DIA A DIAS DO MÊS CORRENTE)
 # ====================================================================
 if modo_visao.startswith("⚡"):
     st.markdown(f"### ⚡ Painel Diário Rápido — Referência: **{mes_atual}**")
-    st.info("💡 **Dica:** Atualize os valores dos cartões abaixo ou registre gastos rápidos. Tudo o que for alterado aqui já atualiza automaticamente a sua Projeção de Longo Prazo e o seu Saldo em Conta.")
+    st.info("💡 **Dica:** Os valores exibidos abaixo correspondem exatamente ao mês selecionado acima. Ao alterar e salvar, eles atualizam de imediato o saldo em conta e a projeção de longo prazo.")
 
     # PAINEL DE RESUMO DO MÊS
     s_final = d_foco['saldo_acumulado_final']
@@ -627,54 +626,54 @@ if modo_visao.startswith("⚡"):
 
     st.divider()
 
-    # FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA DE CARTÕES
+    # FORMULÁRIO DE ATUALIZAÇÃO RÁPIDA DE CARTÕES (Direcionado estritamente para 'mes_atual')
     col_rapido_p1, col_rapido_p2 = st.columns(2)
 
     with col_rapido_p1:
         st.subheader(f"💳 Atualização Rápida — Pessoa 1 (Lucas)")
         cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
         
-        with st.form("form_rapido_p1"):
+        with st.form(f"form_rapido_p1_{mes_atual}"):
             st.markdown(f"**Faturas de Cartão ({mes_atual})**")
             valores_p1 = {}
             for cartao in cartoes_p1:
                 df_c = get_projecao("Pessoa 1", "CARTAO", mes_atual)
                 val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
-                valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{cartao}")
+                valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{mes_atual}_{cartao}")
             
-            btn_save_p1 = st.form_submit_button("💾 Salvar Cartões da Pessoa 1", type="primary", use_container_width=True)
+            btn_save_p1 = st.form_submit_button(f"💾 Salvar Cartões P1 ({mes_atual})", type="primary", use_container_width=True)
             if btn_save_p1:
                 for cartao, val in valores_p1.items():
                     salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
                 st.cache_data.clear()
-                st.success("Cartões da Pessoa 1 atualizados com sucesso!")
+                st.success(f"Cartões da Pessoa 1 para {mes_atual} atualizados com sucesso!")
                 st.rerun()
 
     with col_rapido_p2:
         st.subheader(f"💳 Atualização Rápida — Pessoa 2 (Marcella)")
         cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
         
-        with st.form("form_rapido_p2"):
+        with st.form(f"form_rapido_p2_{mes_atual}"):
             st.markdown(f"**Faturas de Cartão ({mes_atual})**")
             valores_p2 = {}
             for cartao in cartoes_p2:
                 df_c = get_projecao("Pessoa 2", "CARTAO", mes_atual)
                 val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
-                valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{cartao}")
+                valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{mes_atual}_{cartao}")
             
-            btn_save_p2 = st.form_submit_button("💾 Salvar Cartões da Pessoa 2", type="primary", use_container_width=True)
+            btn_save_p2 = st.form_submit_button(f"💾 Salvar Cartões P2 ({mes_atual})", type="primary", use_container_width=True)
             if btn_save_p2:
                 for cartao, val in valores_p2.items():
                     salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
                 st.cache_data.clear()
-                st.success("Cartões da Pessoa 2 atualizados com sucesso!")
+                st.success(f"Cartões da Pessoa 2 para {mes_atual} atualizados com sucesso!")
                 st.rerun()
 
     st.divider()
 
     # REGISTRO RÁPIDO DE PIX / DINHEIRO
     with st.expander(f"➕ **Adicionar Gasto Rápido em {mes_atual} (PIX / Dinheiro)**", expanded=True):
-        with st.form("form_gasto_rapido_fast", clear_on_submit=True):
+        with st.form(f"form_gasto_rapido_fast_{mes_atual}", clear_on_submit=True):
             c_f1, c_f2 = st.columns(2)
             with c_f1:
                 desc = st.text_input("Descrição (ex: Feira, Farmácia, Uber)", placeholder="Digite a descrição...")
@@ -813,7 +812,6 @@ else:
             st.cache_data.clear()
             st.rerun()
 
-        # Força rigorosamente a exibição apenas dos cartões base corretos, impedindo qualquer duplicação
         lista_cartoes_final = ESTRUTURA_CARTÕES_BASE[pessoa]
 
         rows_cart = []
