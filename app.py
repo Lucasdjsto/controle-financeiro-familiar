@@ -7,14 +7,14 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS otimizado para celular e notebook (fontes e blocos ultra-compactos)
+# 2. Injeção de CSS otimizado para Grade Lado a Lado (Celular e Notebook)
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 0.3rem !important;
-            padding-bottom: 1rem !important;
-            padding-left: 0.4rem !important;
-            padding-right: 0.4rem !important;
+            padding-top: 0.2rem !important;
+            padding-bottom: 0.8rem !important;
+            padding-left: 0.3rem !important;
+            padding-right: 0.3rem !important;
         }
         
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
@@ -25,73 +25,67 @@ st.markdown("""
             padding: 2px 4px !important;
         }
         
-        /* Layout Ultra-Compacto para os Blocos de Métricas */
-        .metrics-container-mini {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
+        /* Mini Cards em Grade para o Painel */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 5px;
             width: 100%;
-            margin-bottom: 0.4rem;
+            margin-bottom: 0.5rem;
         }
         
-        .metric-row-mini {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .metric-box {
             background-color: #111827;
             border: 1px solid #1f2937;
-            border-radius: 5px;
-            padding: 4px 8px;
+            border-radius: 6px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
-        .metric-row-reserva-mini {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .metric-box-reserva {
             background-color: #0c2340;
             border: 1px solid #0284c7;
-            border-radius: 5px;
-            padding: 4px 8px;
+            border-radius: 6px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
-        .metric-row-final-mini {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .metric-box-final {
             background-color: #1e1b4b;
             border: 1px solid #6366f1;
-            border-radius: 5px;
-            padding: 4px 8px;
+            border-radius: 6px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
-        .metric-row-patrimonio-mini {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .metric-box-patrimonio {
             background-color: #422006;
             border: 1px solid #d97706;
-            border-radius: 5px;
-            padding: 4px 8px;
+            border-radius: 6px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            grid-column: span 2;
         }
         
-        .metric-label-mini {
-            font-size: 0.68rem;
+        .metric-title {
+            font-size: 0.62rem;
             color: #9ca3af;
             font-weight: 500;
+            margin-bottom: 2px;
         }
         
-        .metric-value-mini {
+        .metric-val {
             font-size: 0.82rem;
             font-weight: 700;
             color: #f3f4f6;
-        }
-        
-        .app-title {
-            font-size: 1.05rem !important;
-            font-weight: 700;
-            color: #f3f4f6;
-            margin: 0;
-            padding: 0;
         }
 
         .stButton > button {
@@ -99,6 +93,15 @@ st.markdown("""
             font-weight: 600;
             padding: 3px 8px;
             font-size: 0.78rem;
+        }
+
+        @media (min-width: 768px) {
+            .metrics-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .metric-box-patrimonio {
+                grid-column: span 3;
+            }
         }
     </style>
 """, unsafe_allow_html=True)
@@ -182,7 +185,7 @@ def get_db_engine():
 
 engine = get_db_engine()
 
-# 5. Inicialização das Tabelas no Banco (incluindo tabela de preferências para a memória)
+# 5. Inicialização das Tabelas no Banco
 def init_db():
     try:
         with engine.begin() as conn:
@@ -539,7 +542,6 @@ dados_financeiros = calcular_sequencia_financeira()
 with st.sidebar:
     st.markdown("### ⚙️ Menu de Controle")
     
-    # 1. Botão de Salvar no Topo da Sidebar
     if st.button("💾 SALVAR DADOS", type="primary", use_container_width=True):
         mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"], mes_foco_atual)
@@ -562,7 +564,6 @@ with st.sidebar:
 
     st.divider()
 
-    # 2. Seleção de Modo na Sidebar
     modo_visao = st.radio(
         "Modo de Navegação:", 
         ["⚡ Modo Rápido (Dia a Dia)", "📈 Projeção Longo Prazo"], 
@@ -571,7 +572,6 @@ with st.sidebar:
 
     st.divider()
 
-    # 3. Memória e Seleção de Mês na Sidebar
     ultimo_mes_salvo = carregar_ultimo_mes_salvo("09.2026")
     idx_padrao = TODOS_MESES_TELA.index(ultimo_mes_salvo) if ultimo_mes_salvo in TODOS_MESES_TELA else 0
 
@@ -579,7 +579,6 @@ with st.sidebar:
     st.session_state["mes_atual_sel"] = mes_atual
     salvar_ultimo_mes_banco(mes_atual)
 
-    # 4. Horizonte e Reset (Apenas visíveis na sidebar se estiver na Projeção Longo Prazo)
     if not modo_visao.startswith("⚡"):
         st.divider()
         modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
@@ -596,7 +595,6 @@ with st.sidebar:
         st.session_state["autenticado"] = False
         st.rerun()
 
-# Configuração dos meses visíveis com base na escolha da sidebar
 idx_foco = TODOS_MESES_TELA.index(mes_atual)
 qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
 meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
@@ -610,56 +608,57 @@ d_foco = dados_financeiros.get(mes_atual, {
 })
 
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO (PAINEL MINIATURA ULTRA-COMPACTO)
+# SEÇÃO 1: MODO RÁPIDO (PAINEL EM GRADE LADO A LADO)
 # ====================================================================
 if modo_visao.startswith("⚡"):
-    st.markdown(f"### ⚡ Painel Diário Rápido — Referência: **{mes_atual}**")
+    st.markdown(f"### ⚡ Painel Diário Rápido — **{mes_atual}**")
 
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
     patrimonio_final = d_foco['patrimonio_total_final']
 
+    # Painel otimizado em Grade (Lado a lado, compacto e esteticamente limpo)
     st.markdown(f"""
-        <div class="metrics-container-mini">
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">1. Saldo Inicial em Conta</span>
-                <span class="metric-value-mini">R$ {d_foco['saldo_anterior']:,.2f}</span>
+        <div class="metrics-grid">
+            <div class="metric-box">
+                <span class="metric-title">1. Saldo Inicial Conta</span>
+                <span class="metric-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">2. Renda Total Família</span>
-                <span class="metric-value-mini">R$ {d_foco['renda_mes']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">2. Renda Total Família</span>
+                <span class="metric-val">R$ {d_foco['renda_mes']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">3. Saídas Totais (Geral)</span>
-                <span class="metric-value-mini">R$ {d_foco['saidas_mes']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">3. Saídas Totais (Geral)</span>
+                <span class="metric-val">R$ {d_foco['saidas_mes']:,.2f}</span>
             </div>
-            <div class="metric-row-reserva-mini">
-                <span class="metric-label-mini" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</span>
-                <span class="metric-value-mini" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+            <div class="metric-box-reserva">
+                <span class="metric-title" style="color:#38bdf8;">🔒 4. Caixinha Guardada</span>
+                <span class="metric-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
-            <div class="metric-row-final-mini">
-                <span class="metric-label-mini" style="color:#a5b4fc;">5. Saldo Corrente em Conta</span>
-                <span class="metric-value-mini" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
+            <div class="metric-box-final">
+                <span class="metric-title" style="color:#a5b4fc;">5. Saldo Corrente Conta</span>
+                <span class="metric-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
             </div>
-            <div class="metric-row-patrimonio-mini">
-                <span class="metric-label-mini" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
-                <span class="metric-value-mini" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">👤 P1 (Lucas) Renda</span>
+                <span class="metric-val" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">👤 Pessoa 1 (Lucas) - Renda</span>
-                <span class="metric-value-mini" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">👤 P1 (Lucas) Gastos</span>
+                <span class="metric-val" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">👤 Pessoa 1 (Lucas) - Gastos Próprios</span>
-                <span class="metric-value-mini" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">👤 P2 (Marcella) Renda</span>
+                <span class="metric-val" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">👤 Pessoa 2 (Marcella) - Renda</span>
-                <span class="metric-value-mini" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">👤 P2 (Marcella) Gastos</span>
+                <span class="metric-val" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">👤 Pessoa 2 (Marcella) - Gastos Próprios</span>
-                <span class="metric-value-mini" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
+            <div class="metric-box-patrimonio">
+                <span class="metric-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
+                <span class="metric-val" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -669,18 +668,17 @@ if modo_visao.startswith("⚡"):
     col_rapido_p1, col_rapido_p2 = st.columns(2)
 
     with col_rapido_p1:
-        st.subheader(f"💳 Atualização Rápida — Pessoa 1 (Lucas)")
+        st.subheader(f"💳 Cartões — P1 (Lucas)")
         cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
         
         with st.form(f"form_rapido_p1_{mes_atual}"):
-            st.markdown(f"**Faturas de Cartão ({mes_atual})**")
             valores_p1 = {}
             for cartao in cartoes_p1:
                 df_c = get_projecao("Pessoa 1", "CARTAO", mes_atual)
                 val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
                 valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{mes_atual}_{cartao}")
             
-            if st.form_submit_button(f"💾 Salvar Cartões P1 ({mes_atual})", type="primary", use_container_width=True):
+            if st.form_submit_button(f"💾 Salvar P1 ({mes_atual})", type="primary", use_container_width=True):
                 for cartao, val in valores_p1.items():
                     salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
                 st.cache_data.clear()
@@ -688,18 +686,17 @@ if modo_visao.startswith("⚡"):
                 st.rerun()
 
     with col_rapido_p2:
-        st.subheader(f"💳 Atualização Rápida — Pessoa 2 (Marcella)")
+        st.subheader(f"💳 Cartões — P2 (Marcella)")
         cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
         
         with st.form(f"form_rapido_p2_{mes_atual}"):
-            st.markdown(f"**Faturas de Cartão ({mes_atual})**")
             valores_p2 = {}
             for cartao in cartoes_p2:
                 df_c = get_projecao("Pessoa 2", "CARTAO", mes_atual)
                 val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
                 valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{mes_atual}_{cartao}")
             
-            if st.form_submit_button(f"💾 Salvar Cartões P2 ({mes_atual})", type="primary", use_container_width=True):
+            if st.form_submit_button(f"💾 Salvar P2 ({mes_atual})", type="primary", use_container_width=True):
                 for cartao, val in valores_p2.items():
                     salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
                 st.cache_data.clear()
@@ -730,53 +727,54 @@ if modo_visao.startswith("⚡"):
 # SEÇÃO 2: PROJEÇÃO COMPLETA & LONGO PRAZO
 # ====================================================================
 else:
-    st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
+    st.markdown(f"#### ⚡ Resumo Consolidador — **{mes_atual}**")
 
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
     patrimonio_final = d_foco['patrimonio_total_final']
 
+    # Mesma grade lado a lado aplicada no modo completo
     st.markdown(f"""
-        <div class="metrics-container-mini">
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">1. Saldo Inicial em Conta</span>
-                <span class="metric-value-mini">R$ {d_foco['saldo_anterior']:,.2f}</span>
+        <div class="metrics-grid">
+            <div class="metric-box">
+                <span class="metric-title">1. Saldo Inicial Conta</span>
+                <span class="metric-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">2. Renda Total Família</span>
-                <span class="metric-value-mini">R$ {d_foco['renda_mes']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">2. Renda Total Família</span>
+                <span class="metric-val">R$ {d_foco['renda_mes']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">3. Saídas Totais (Geral)</span>
-                <span class="metric-value-mini">R$ {d_foco['saidas_mes']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">3. Saídas Totais (Geral)</span>
+                <span class="metric-val">R$ {d_foco['saidas_mes']:,.2f}</span>
             </div>
-            <div class="metric-row-reserva-mini">
-                <span class="metric-label-mini" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</span>
-                <span class="metric-value-mini" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+            <div class="metric-box-reserva">
+                <span class="metric-title" style="color:#38bdf8;">🔒 4. Caixinha Guardada</span>
+                <span class="metric-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
-            <div class="metric-row-final-mini">
-                <span class="metric-label-mini" style="color:#a5b4fc;">5. Saldo Corrente em Conta</span>
-                <span class="metric-value-mini" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
+            <div class="metric-box-final">
+                <span class="metric-title" style="color:#a5b4fc;">5. Saldo Corrente Conta</span>
+                <span class="metric-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
             </div>
-            <div class="metric-row-patrimonio-mini">
-                <span class="metric-label-mini" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
-                <span class="metric-value-mini" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">👤 P1 (Lucas) Renda</span>
+                <span class="metric-val" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">👤 Pessoa 1 (Lucas) - Renda</span>
-                <span class="metric-value-mini" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">👤 P1 (Lucas) Gastos</span>
+                <span class="metric-val" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">👤 Pessoa 1 (Lucas) - Gastos Próprios</span>
-                <span class="metric-value-mini" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">👤 P2 (Marcella) Renda</span>
+                <span class="metric-val" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">👤 Pessoa 2 (Marcella) - Renda</span>
-                <span class="metric-value-mini" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
+            <div class="metric-box">
+                <span class="metric-title">👤 P2 (Marcella) Gastos</span>
+                <span class="metric-val" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
             </div>
-            <div class="metric-row-mini">
-                <span class="metric-label-mini">👤 Pessoa 2 (Marcella) - Gastos Próprios</span>
-                <span class="metric-value-mini" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
+            <div class="metric-box-patrimonio">
+                <span class="metric-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
+                <span class="metric-val" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
