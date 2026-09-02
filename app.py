@@ -7,18 +7,18 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Otimizado para Mobile (Fontes menores e design discreto)
+# 2. Injeção de CSS Otimizado para Mobile (Fontes ajustadas e responsivas)
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 0.4rem !important;
+            padding-top: 0.3rem !important;
             padding-bottom: 1rem !important;
-            padding-left: 0.4rem !important;
-            padding-right: 0.4rem !important;
+            padding-left: 0.3rem !important;
+            padding-right: 0.3rem !important;
         }
         
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
-            font-size: 0.8rem !important;
+            font-size: 0.75rem !important;
         }
         
         .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
@@ -28,9 +28,9 @@ st.markdown("""
         .metrics-container-compact {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 3px;
             width: 100%;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.4rem;
         }
         
         .metric-row-compact {
@@ -39,8 +39,8 @@ st.markdown("""
             align-items: center;
             background-color: #111827;
             border: 1px solid #1f2937;
-            border-radius: 6px;
-            padding: 5px 8px;
+            border-radius: 5px;
+            padding: 4px 7px;
         }
 
         .metric-row-reserva {
@@ -49,8 +49,8 @@ st.markdown("""
             align-items: center;
             background-color: #0c2340;
             border: 1px solid #0284c7;
-            border-radius: 6px;
-            padding: 5px 8px;
+            border-radius: 5px;
+            padding: 4px 7px;
         }
 
         .metric-row-final {
@@ -59,30 +59,41 @@ st.markdown("""
             align-items: center;
             background-color: #1e1b4b;
             border: 1px solid #6366f1;
-            border-radius: 6px;
-            padding: 5px 8px;
+            border-radius: 5px;
+            padding: 4px 7px;
         }
         
         .metric-label-compact {
-            font-size: 0.7rem;
+            font-size: 0.68rem;
             color: #9ca3af;
             font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 60%;
         }
         
         .metric-value-compact {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: 700;
             color: #f3f4f6;
+            white-space: nowrap;
         }
-        
-        .delta-positive { color: #4ade80; font-size: 0.65rem; font-weight: 600; }
-        .delta-negative { color: #f87171; font-size: 0.65rem; font-weight: 600; }
+
+        .app-title {
+            font-size: 1.15rem !important;
+            font-weight: 700;
+            color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            white-space: nowrap;
+        }
 
         .stButton > button {
-            border-radius: 6px;
+            border-radius: 5px;
             font-weight: 600;
-            padding: 4px 10px;
-            font-size: 0.8rem;
+            padding: 3px 8px;
+            font-size: 0.75rem;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -479,10 +490,10 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO COMPACTO
+# 10. CABEÇALHO COM TÍTULO DIMENSIONADO E SEM CORTES
 col_h1, col_h2, col_h3 = st.columns([5, 3, 2])
 with col_h1:
-    st.markdown("### 📊 Painel Financeiro")
+    st.markdown('<p class="app-title">📊 Painel Financeiro</p>', unsafe_allow_html=True)
 with col_h2:
     if st.button("💾 Salvar", use_container_width=True):
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"])
@@ -643,10 +654,10 @@ else:
     gasto_p1 = d_foco['gasto_p1']
     gasto_p2 = d_foco['gasto_p2']
 
-    # Mostradores Compactos de Longo Prazo (Todos restaurados em tamanho menor)
-    st.markdown(f"""
+    # Mostradores Compactos Renderizados via HTML Seguro
+    html_metrics = f"""
         <div class="metrics-container-compact">
-            <div style="display: flex; gap: 4px;">
+            <div style="display: flex; gap: 3px;">
                 <div class="metric-row-compact" style="flex:1;">
                     <span class="metric-label-compact">1. Saldo Inicial</span>
                     <span class="metric-value-compact">R$ {d_foco['saldo_anterior']:,.2f}</span>
@@ -661,7 +672,7 @@ else:
                 </div>
             </div>
             
-            <div style="display: flex; gap: 4px;">
+            <div style="display: flex; gap: 3px;">
                 <div class="metric-row-reserva" style="flex:1;">
                     <span class="metric-label-compact" style="color:#38bdf8;">🔒 4. Caixinha</span>
                     <span class="metric-value-compact" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
@@ -672,14 +683,14 @@ else:
                 </div>
             </div>
 
-            <div style="display: flex; gap: 4px;">
+            <div style="display: flex; gap: 3px;">
                 <div class="metric-row-compact" style="flex:1;">
                     <span class="metric-label-compact" style="color:#fbbf24;">💰 Patrimônio Geral</span>
                     <span class="metric-value-compact" style="color:#fbbf24;">R$ {patrimonio_total:,.2f}</span>
                 </div>
             </div>
 
-            <div style="display: flex; gap: 4px;">
+            <div style="display: flex; gap: 3px;">
                 <div class="metric-row-compact" style="flex:1;">
                     <span class="metric-label-compact">👤 P1 (Lucas) - Renda</span>
                     <span class="metric-value-compact">R$ {renda_p1:,.2f}</span>
@@ -690,7 +701,7 @@ else:
                 </div>
             </div>
 
-            <div style="display: flex; gap: 4px;">
+            <div style="display: flex; gap: 3px;">
                 <div class="metric-row-compact" style="flex:1;">
                     <span class="metric-label-compact">👤 P2 (Marcella) - Renda</span>
                     <span class="metric-value-compact">R$ {renda_p2:,.2f}</span>
@@ -701,7 +712,8 @@ else:
                 </div>
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(html_metrics, unsafe_allow_html=True)
 
     st.divider()
 
