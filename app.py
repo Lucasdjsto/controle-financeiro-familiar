@@ -673,7 +673,7 @@ with tab_p2:
     renderizar_pessoa("Pessoa 2", "p2")
 
 with tab_comuns:
-    st.header("🏡 Despesas Comuns do Casal / Casa")
+    st.header("🏡 Despesas Comuns do Casa / Casa")
     df_comuns_edit = st.data_editor(
         df_comuns_all, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
         column_config={
@@ -688,16 +688,30 @@ with tab_consolidado:
     st.header("🏠 Visão Consolidada, Caixinha & Totais")
     
     st.subheader("📦 Caixinha de Reserva da Família (Acumulativa)")
+    
+    # Calcula o total acumulado real considerando TODA a linha do tempo desde o início até o último mês visível
     rows_caixinha = []
-    acumulado_temp = 0.0
+    acumulado_total_geral = 0.0
+    
+    # Primeiro, soma tudo o que existe no banco até o último mês da tabela visível
+    for m_item in TODOS_MESES_SISTEMA:
+        val_db = df_caixinha_all[df_caixinha_all['mes_ano'] == m_item]['valor'] if not df_caixinha_all.empty else pd.Series()
+        val_aporte = safe_float(val_db.iloc[0]) if not val_db.empty else 0.0
+        acumulado_total_geral += val_aporte
+        # Guarda o acumulado exato por mês
+        if "acumulado_por_mes" not in locals():
+            acumulado_por_mes = {}
+        acumulado_por_mes[m_item] = acumulado_total_geral
+
     for mes in meses_visiveis:
         val = df_caixinha_all[df_caixinha_all['mes_ano'] == mes]['valor'] if not df_caixinha_all.empty else pd.Series()
         val_aporte = safe_float(val.iloc[0]) if not val.empty else 0.0
-        acumulado_temp += val_aporte
+        total_ate_mes = acumulado_por_mes.get(mes, 0.0)
+        
         rows_caixinha.append({
             "Mês": mes, 
             "Aporte do Mês (R$)": val_aporte,
-            "Total Acumulado na Caixinha (R$)": acumulado_temp
+            "Total Acumulado na Caixinha (R$)": total_ate_mes
         })
         
     df_caixinha_grid = pd.DataFrame(rows_caixinha)
