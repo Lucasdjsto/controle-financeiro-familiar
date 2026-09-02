@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS otimizado com fontes e blocos ultra-compactos para caber em 1 bloco só
+# 2. Injeção de CSS otimizado para celular e notebook (fontes e blocos ultra-compactos)
 st.markdown("""
     <style>
         .block-container {
@@ -535,9 +535,11 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. BARRA LATERAL (SIDEBAR) PARA BOTÕES DE SALVAR E SAIR SEMPRE VISÍVEIS
+# 10. MENU LATERAL (SIDEBAR) PARA CONTROLE TOTAL (Modo, Mês, Salvar, Sair)
 with st.sidebar:
-    st.markdown("### ⚙️ Menu Principal")
+    st.markdown("### ⚙️ Menu de Controle")
+    
+    # 1. Botão de Salvar no Topo da Sidebar
     if st.button("💾 SALVAR DADOS", type="primary", use_container_width=True):
         mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"], mes_foco_atual)
@@ -559,53 +561,46 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
+
+    # 2. Seleção de Modo na Sidebar
+    modo_visao = st.radio(
+        "Modo de Navegação:", 
+        ["⚡ Modo Rápido (Dia a Dia)", "📈 Projeção Longo Prazo"], 
+        index=0
+    )
+
+    st.divider()
+
+    # 3. Memória e Seleção de Mês na Sidebar
+    ultimo_mes_salvo = carregar_ultimo_mes_salvo("09.2026")
+    idx_padrao = TODOS_MESES_TELA.index(ultimo_mes_salvo) if ultimo_mes_salvo in TODOS_MESES_TELA else 0
+
+    mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
+    st.session_state["mes_atual_sel"] = mes_atual
+    salvar_ultimo_mes_banco(mes_atual)
+
+    # 4. Horizonte e Reset (Apenas visíveis na sidebar se estiver na Projeção Longo Prazo)
+    if not modo_visao.startswith("⚡"):
+        st.divider()
+        modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
+        st.write("")
+        if st.button("🔄 Resetar Status Faturas", help="Limpa do banco todos os status de Fatura Fechada acumulados", use_container_width=True):
+            resetar_todos_status_faturas()
+            st.success("Status resetados!")
+            st.rerun()
+    else:
+        modo_exibicao = "6 Meses"
+
+    st.divider()
     if st.button("🚪 Sair do Sistema", use_container_width=True):
         st.session_state["autenticado"] = False
         st.rerun()
 
-# SELECTOR DE MODO DE VISUALIZAÇÃO
-modo_visao = st.radio(
-    "Modo de Navegação:", 
-    ["⚡ **Modo Rápido (Dia a Dia)**", "📈 **Projeção Completa & Longo Prazo**"], 
-    horizontal=True,
-    label_visibility="collapsed"
-)
-
-st.divider()
-
-# RECUPERA O ÚLTIMO MÊS SALVO DO BANCO PARA ABRIR NELA
-ultimo_mes_salvo = carregar_ultimo_mes_salvo("09.2026")
-idx_padrao = TODOS_MESES_TELA.index(ultimo_mes_salvo) if ultimo_mes_salvo in TODOS_MESES_TELA else 0
-
-# CONTROLES TEMPORAIS (Comportamento condicional para ocultar 6/12M e Reset APENAS do modo rápido)
-if modo_visao.startswith("⚡"):
-    # MODO RÁPIDO: Sem seletor 6/12 meses, sem botão de reset, visibilidade limpa
-    mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
-    st.session_state["mes_atual_sel"] = mes_atual
-    meses_visiveis = [mes_atual]
-    st.session_state["meses_v"] = meses_visiveis
-else:
-    # PROJEÇÃO LONGO PRAZO: Mantém todas as opções de 6/12 meses e o botão de reset intactos
-    c_sel1, c_sel2, c_reset = st.columns([5, 4, 3])
-    with c_sel1:
-        mes_atual = st.selectbox("📅 Mês de Referência:", TODOS_MESES_TELA[:36], index=idx_padrao)
-        st.session_state["mes_atual_sel"] = mes_atual
-    with c_sel2:
-        modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
-    with c_reset:
-        st.write("")
-        if st.button("🔄 Resetar Status Faturas", help="Limpa do banco todos os status de Fatura Fechada acumulados"):
-            resetar_todos_status_faturas()
-            st.success("Status de faturas resetados no banco!")
-            st.rerun()
-            
-    idx_foco = TODOS_MESES_TELA.index(mes_atual)
-    qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
-    meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
-    st.session_state["meses_v"] = meses_visiveis
-
-# Sempre que o mês mudar no selectbox, salva a preferência no banco
-salvar_ultimo_mes_banco(mes_atual)
+# Configuração dos meses visíveis com base na escolha da sidebar
+idx_foco = TODOS_MESES_TELA.index(mes_atual)
+qtd_meses = 6 if modo_exibicao == "6 Meses" else 12
+meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
+st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros.get(mes_atual, {
     "saldo_anterior": 0.0, "renda_mes": 0.0, "renda_p1": 0.0, "renda_p2": 0.0,
@@ -623,10 +618,7 @@ if modo_visao.startswith("⚡"):
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
     patrimonio_final = d_foco['patrimonio_total_final']
-    delta_class = "delta-positive" if patrimonio_final >= 0 else "delta-negative"
-    delta_label = "↑ Positivo" if patrimonio_final >= 0 else "↓ Déficit"
 
-    # Painel redimensionado e compactado para caber em 1 bloco só
     st.markdown(f"""
         <div class="metrics-container-mini">
             <div class="metric-row-mini">
@@ -735,7 +727,7 @@ if modo_visao.startswith("⚡"):
                     st.rerun()
 
 # ====================================================================
-# SEÇÃO 2: PROJEÇÃO COMPLETA & LONGO PRAZO (PAINEL MINIATURA ULTRA-COMPACTO)
+# SEÇÃO 2: PROJEÇÃO COMPLETA & LONGO PRAZO
 # ====================================================================
 else:
     st.markdown(f"#### ⚡ Resumo Financeiro Consolidador - {mes_atual}")
@@ -743,10 +735,7 @@ else:
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
     patrimonio_final = d_foco['patrimonio_total_final']
-    delta_class = "delta-positive" if patrimonio_final >= 0 else "delta-negative"
-    delta_label = "↑ Positivo" if patrimonio_final >= 0 else "↓ Déficit"
 
-    # Mesma estrutura ultra-compacta aplicada no modo completo
     st.markdown(f"""
         <div class="metrics-container-mini">
             <div class="metric-row-mini">
