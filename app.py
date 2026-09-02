@@ -7,38 +7,109 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Otimizado para Mobile
+# 2. Injeção de CSS para Caixas Destacadas e Topo Otimizado (Sem cortes)
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 0.3rem !important;
+            padding-top: 0.2rem !important;
             padding-bottom: 1rem !important;
-            padding-left: 0.3rem !important;
-            padding-right: 0.3rem !important;
+            padding-left: 0.4rem !important;
+            padding-right: 0.4rem !important;
         }
         
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
-            font-size: 0.75rem !important;
+            font-size: 0.8rem !important;
         }
         
         .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
             padding: 2px 4px !important;
         }
+        
+        /* Estilos das Caixas Destacadas */
+        .box-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+            margin-bottom: 0.6rem;
+        }
+        
+        .box-row {
+            display: flex;
+            gap: 6px;
+            width: 100%;
+        }
+        
+        .box-card {
+            background-color: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 8px;
+            padding: 8px 12px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
 
+        .box-card-reserva {
+            background-color: #0c2340;
+            border: 1px solid #0284c7;
+            border-radius: 8px;
+            padding: 8px 12px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .box-card-final {
+            background-color: #1e1b4b;
+            border: 1px solid #6366f1;
+            border-radius: 8px;
+            padding: 8px 12px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .box-card-patrimonio {
+            background-color: #422006;
+            border: 1px solid #d97706;
+            border-radius: 8px;
+            padding: 8px 12px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .box-label {
+            font-size: 0.7rem;
+            color: #9ca3af;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        
+        .box-value {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #f3f4f6;
+        }
+        
         .app-title {
-            font-size: 1.15rem !important;
+            font-size: 1.1rem !important;
             font-weight: 700;
             color: #f3f4f6;
             margin: 0;
             padding: 0;
-            white-space: nowrap;
         }
 
         .stButton > button {
-            border-radius: 5px;
+            border-radius: 6px;
             font-weight: 600;
-            padding: 3px 8px;
-            font-size: 0.75rem;
+            padding: 4px 10px;
+            font-size: 0.8rem;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -435,8 +506,8 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. CABEÇALHO COM TÍTULO DIMENSIONADO E SEM CORTES
-col_h1, col_h2, col_h3 = st.columns([5, 3, 2])
+# 10. CABEÇALHO PERFEITO E LIVRE DE CORTES
+col_h1, col_h2, col_h3 = st.columns([4, 4, 2])
 with col_h1:
     st.markdown('<p class="app-title">📊 Painel Financeiro</p>', unsafe_allow_html=True)
 with col_h2:
@@ -454,7 +525,7 @@ with col_h2:
         if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"])
         if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"])
         st.cache_data.clear()
-        st.success("Salvo com sucesso!")
+        st.success("Salvo!")
         st.rerun()
 with col_h3:
     if st.button("🚪 Sair", use_container_width=True):
@@ -500,7 +571,7 @@ d_foco = dados_financeiros.get(mes_atual, {
 })
 
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO
+# SEÇÃO 1: MODO RÁPIDO (EXATAMENTE 5 CAIXAS DESTACADAS)
 # ====================================================================
 if modo_visao.startswith("⚡"):
     
@@ -508,14 +579,40 @@ if modo_visao.startswith("⚡"):
     caixinha_acum = d_foco['caixinha_acumulada']
     delta_txt = "Positivo" if s_final >= 0 else "Déficit"
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("1. Saldo Inicial", f"R$ {d_foco['saldo_anterior']:,.2f}")
-    c2.metric("2. Renda Total", f"R$ {d_foco['renda_mes']:,.2f}")
-    c3.metric("3. Saídas Totais", f"R$ {d_foco['saidas_mes']:,.2f}")
-
-    c4, c5 = st.columns(2)
-    c4.metric("🔒 4. Caixinha", f"R$ {caixinha_acum:,.2f}")
-    c5.metric("5. Saldo Conta", f"R$ {s_final:,.2f}", delta=delta_txt)
+    st.markdown(f"""
+        <div class="box-container">
+            <div class="box-row">
+                <div class="box-card">
+                    <span class="box-label">1. Saldo Inicial em Conta</span>
+                    <span class="box-value">R$ {d_foco['saldo_anterior']:,.2f}</span>
+                </div>
+            </div>
+            <div class="box-row">
+                <div class="box-card">
+                    <span class="box-label">2. Renda Total Família</span>
+                    <span class="box-value">R$ {d_foco['renda_mes']:,.2f}</span>
+                </div>
+            </div>
+            <div class="box-row">
+                <div class="box-card">
+                    <span class="box-label">3. Saídas Totais (Geral)</span>
+                    <span class="box-value">R$ {d_foco['saidas_mes']:,.2f}</span>
+                </div>
+            </div>
+            <div class="box-row">
+                <div class="box-card-reserva">
+                    <span class="box-label" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</span>
+                    <span class="box-value" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+                </div>
+            </div>
+            <div class="box-row">
+                <div class="box-card-final">
+                    <span class="box-label" style="color:#a5b4fc;">5. Saldo Corrente em Conta</span>
+                    <span class="box-value" style="color:#a5b4fc;">R$ {s_final:,.2f} ({delta_txt})</span>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     st.divider()
 
@@ -571,7 +668,7 @@ if modo_visao.startswith("⚡"):
                     st.rerun()
 
 # ====================================================================
-# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (COM TODOS OS MOSTRADORES NATIVOS)
+# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (EXATAMENTE OS 10 BOXES DA SUA REFERÊNCIA)
 # ====================================================================
 else:
     s_final = d_foco['saldo_acumulado_final']
@@ -582,25 +679,65 @@ else:
     gasto_p1 = d_foco['gasto_p1']
     gasto_p2 = d_foco['gasto_p2']
 
-    # Mostradores Nativos compactos e organizados em colunas
-    mc1, mc2, mc3 = st.columns(3)
-    mc1.metric("1. Saldo Inicial", f"R$ {d_foco['saldo_anterior']:,.2f}")
-    mc2.metric("2. Renda Total", f"R$ {d_foco['renda_mes']:,.2f}")
-    mc3.metric("3. Saídas Totais", f"R$ {d_foco['saidas_mes']:,.2f}")
+    # Renderização exata dos 10 boxes em caixas destacadas responsivas
+    st.markdown(f"""
+        <div class="box-container">
+            <div class="box-row">
+                <div class="box-card">
+                    <span class="box-label">1. Saldo Inicial</span>
+                    <span class="box-value">R$ {d_foco['saldo_anterior']:,.2f}</span>
+                </div>
+                <div class="box-card">
+                    <span class="box-label">2. Renda Total</span>
+                    <span class="box-value">R$ {d_foco['renda_mes']:,.2f}</span>
+                </div>
+                <div class="box-card">
+                    <span class="box-label">3. Saídas Totais</span>
+                    <span class="box-value">R$ {d_foco['saidas_mes']:,.2f}</span>
+                </div>
+            </div>
+            
+            <div class="box-row">
+                <div class="box-card-reserva">
+                    <span class="box-label" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</span>
+                    <span class="box-value" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+                </div>
+                <div class="box-card-final">
+                    <span class="box-label" style="color:#a5b4fc;">5. Saldo Corrente em Conta</span>
+                    <span class="box-value" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
+                </div>
+            </div>
 
-    mc4, mc5 = st.columns(2)
-    mc4.metric("🔒 4. Caixinha", f"R$ {caixinha_acum:,.2f}")
-    mc5.metric("5. Saldo Conta", f"R$ {s_final:,.2f}")
+            <div class="box-row">
+                <div class="box-card-patrimonio">
+                    <span class="box-label" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
+                    <span class="box-value" style="color:#fbbf24;">R$ {patrimonio_total:,.2f}</span>
+                </div>
+            </div>
 
-    st.metric("💰 Patrimônio Geral", f"R$ {patrimonio_total:,.2f}")
+            <div class="box-row">
+                <div class="box-card">
+                    <span class="box-label">👤 Pessoa 1 (Lucas) - Renda</span>
+                    <span class="box-value">R$ {renda_p1:,.2f}</span>
+                </div>
+                <div class="box-card">
+                    <span class="box-label">👤 Pessoa 1 (Lucas) - Gastos Próprios</span>
+                    <span class="box-value">R$ {gasto_p1:,.2f}</span>
+                </div>
+            </div>
 
-    mp1, mp2 = st.columns(2)
-    mp1.metric("👤 P1 Renda", f"R$ {renda_p1:,.2f}")
-    mp2.metric("👤 P1 Gastos", f"R$ {gasto_p1:,.2f}")
-
-    mp3, mp4 = st.columns(2)
-    mp3.metric("👤 P2 Renda", f"R$ {renda_p2:,.2f}")
-    mp4.metric("👤 P2 Gastos", f"R$ {gasto_p2:,.2f}")
+            <div class="box-row">
+                <div class="box-card">
+                    <span class="box-label">👤 Pessoa 2 (Marcella) - Renda</span>
+                    <span class="box-value">R$ {renda_p2:,.2f}</span>
+                </div>
+                <div class="box-card">
+                    <span class="box-label">👤 Pessoa 2 (Marcella) - Gastos Próprios</span>
+                    <span class="box-value">R$ {gasto_p2:,.2f}</span>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     st.divider()
 
