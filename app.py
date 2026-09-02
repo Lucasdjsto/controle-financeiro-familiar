@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
 
-# 2. Injeção de CSS Otimizado para Mobile (Fontes ajustadas e responsivas)
+# 2. Injeção de CSS Otimizado para Mobile
 st.markdown("""
     <style>
         .block-container {
@@ -23,61 +23,6 @@ st.markdown("""
         
         .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
             padding: 2px 4px !important;
-        }
-        
-        .metrics-container-compact {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-            width: 100%;
-            margin-bottom: 0.4rem;
-        }
-        
-        .metric-row-compact {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: #111827;
-            border: 1px solid #1f2937;
-            border-radius: 5px;
-            padding: 4px 7px;
-        }
-
-        .metric-row-reserva {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: #0c2340;
-            border: 1px solid #0284c7;
-            border-radius: 5px;
-            padding: 4px 7px;
-        }
-
-        .metric-row-final {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: #1e1b4b;
-            border: 1px solid #6366f1;
-            border-radius: 5px;
-            padding: 4px 7px;
-        }
-        
-        .metric-label-compact {
-            font-size: 0.68rem;
-            color: #9ca3af;
-            font-weight: 500;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 60%;
-        }
-        
-        .metric-value-compact {
-            font-size: 0.8rem;
-            font-weight: 700;
-            color: #f3f4f6;
-            white-space: nowrap;
         }
 
         .app-title {
@@ -107,7 +52,7 @@ def safe_float(val, default=0.0):
     except (ValueError, TypeError):
         return default
 
-# Funções de Conversão de Mês Visual para Banco (Deslocamento de +1 mês)
+# Funções de Conversão de Mês Visual para Banco
 def mes_banco_para_tela(mes_banco):
     try:
         m, y = map(int, mes_banco.split("."))
@@ -130,7 +75,7 @@ def mes_tela_para_banco(mes_tela):
     except:
         return mes_tela
 
-# 3. Autenticação por Senha (Fixada em pretabebe)
+# 3. Autenticação por Senha
 def verificar_senha():
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
@@ -561,33 +506,16 @@ if modo_visao.startswith("⚡"):
     
     s_final = d_foco['saldo_acumulado_final']
     caixinha_acum = d_foco['caixinha_acumulada']
-    delta_class = "delta-positive" if s_final >= 0 else "delta-negative"
     delta_txt = "Positivo" if s_final >= 0 else "Déficit"
 
-    st.markdown(f"""
-        <div class="metrics-container-compact">
-            <div class="metric-row-compact">
-                <span class="metric-label-compact">1. Saldo Inicial em Conta</span>
-                <span class="metric-value-compact">R$ {d_foco['saldo_anterior']:,.2f}</span>
-            </div>
-            <div class="metric-row-compact">
-                <span class="metric-label-compact">2. Renda Total Família</span>
-                <span class="metric-value-compact">R$ {d_foco['renda_mes']:,.2f}</span>
-            </div>
-            <div class="metric-row-compact">
-                <span class="metric-label-compact">3. Saídas Totais (Geral)</span>
-                <span class="metric-value-compact">R$ {d_foco['saidas_mes']:,.2f}</span>
-            </div>
-            <div class="metric-row-reserva">
-                <span class="metric-label-compact" style="color:#38bdf8;">🔒 4. Caixinha Guardada (Reserva)</span>
-                <span class="metric-value-compact" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
-            </div>
-            <div class="metric-row-final">
-                <span class="metric-label-compact" style="color:#a5b4fc;">5. Saldo Corrente em Conta</span>
-                <span class="metric-value-compact" style="color:#a5b4fc;">R$ {s_final:,.2f} <span class="{delta_class}">({delta_txt})</span></span>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("1. Saldo Inicial", f"R$ {d_foco['saldo_anterior']:,.2f}")
+    c2.metric("2. Renda Total", f"R$ {d_foco['renda_mes']:,.2f}")
+    c3.metric("3. Saídas Totais", f"R$ {d_foco['saidas_mes']:,.2f}")
+
+    c4, c5 = st.columns(2)
+    c4.metric("🔒 4. Caixinha", f"R$ {caixinha_acum:,.2f}")
+    c5.metric("5. Saldo Conta", f"R$ {s_final:,.2f}", delta=delta_txt)
 
     st.divider()
 
@@ -643,7 +571,7 @@ if modo_visao.startswith("⚡"):
                     st.rerun()
 
 # ====================================================================
-# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (COM TODOS OS MOSTRADORES REDIMENSIONADOS)
+# SEÇÃO 2: PROJEÇÃO LONGO PRAZO (COM TODOS OS MOSTRADORES NATIVOS)
 # ====================================================================
 else:
     s_final = d_foco['saldo_acumulado_final']
@@ -654,66 +582,25 @@ else:
     gasto_p1 = d_foco['gasto_p1']
     gasto_p2 = d_foco['gasto_p2']
 
-    # Mostradores Compactos Renderizados via HTML Seguro
-    html_metrics = f"""
-        <div class="metrics-container-compact">
-            <div style="display: flex; gap: 3px;">
-                <div class="metric-row-compact" style="flex:1;">
-                    <span class="metric-label-compact">1. Saldo Inicial</span>
-                    <span class="metric-value-compact">R$ {d_foco['saldo_anterior']:,.2f}</span>
-                </div>
-                <div class="metric-row-compact" style="flex:1;">
-                    <span class="metric-label-compact">2. Renda Total</span>
-                    <span class="metric-value-compact">R$ {d_foco['renda_mes']:,.2f}</span>
-                </div>
-                <div class="metric-row-compact" style="flex:1;">
-                    <span class="metric-label-compact">3. Saídas Totais</span>
-                    <span class="metric-value-compact">R$ {d_foco['saidas_mes']:,.2f}</span>
-                </div>
-            </div>
-            
-            <div style="display: flex; gap: 3px;">
-                <div class="metric-row-reserva" style="flex:1;">
-                    <span class="metric-label-compact" style="color:#38bdf8;">🔒 4. Caixinha</span>
-                    <span class="metric-value-compact" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
-                </div>
-                <div class="metric-row-final" style="flex:1;">
-                    <span class="metric-label-compact" style="color:#a5b4fc;">5. Saldo Conta</span>
-                    <span class="metric-value-compact" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
-                </div>
-            </div>
+    # Mostradores Nativos compactos e organizados em colunas
+    mc1, mc2, mc3 = st.columns(3)
+    mc1.metric("1. Saldo Inicial", f"R$ {d_foco['saldo_anterior']:,.2f}")
+    mc2.metric("2. Renda Total", f"R$ {d_foco['renda_mes']:,.2f}")
+    mc3.metric("3. Saídas Totais", f"R$ {d_foco['saidas_mes']:,.2f}")
 
-            <div style="display: flex; gap: 3px;">
-                <div class="metric-row-compact" style="flex:1;">
-                    <span class="metric-label-compact" style="color:#fbbf24;">💰 Patrimônio Geral</span>
-                    <span class="metric-value-compact" style="color:#fbbf24;">R$ {patrimonio_total:,.2f}</span>
-                </div>
-            </div>
+    mc4, mc5 = st.columns(2)
+    mc4.metric("🔒 4. Caixinha", f"R$ {caixinha_acum:,.2f}")
+    mc5.metric("5. Saldo Conta", f"R$ {s_final:,.2f}")
 
-            <div style="display: flex; gap: 3px;">
-                <div class="metric-row-compact" style="flex:1;">
-                    <span class="metric-label-compact">👤 P1 (Lucas) - Renda</span>
-                    <span class="metric-value-compact">R$ {renda_p1:,.2f}</span>
-                </div>
-                <div class="metric-row-compact" style="flex:1;">
-                    <span class="metric-label-compact">👤 P1 (Lucas) - Gastos</span>
-                    <span class="metric-value-compact">R$ {gasto_p1:,.2f}</span>
-                </div>
-            </div>
+    st.metric("💰 Patrimônio Geral", f"R$ {patrimonio_total:,.2f}")
 
-            <div style="display: flex; gap: 3px;">
-                <div class="metric-row-compact" style="flex:1;">
-                    <span class="metric-label-compact">👤 P2 (Marcella) - Renda</span>
-                    <span class="metric-value-compact">R$ {renda_p2:,.2f}</span>
-                </div>
-                <div class="metric-row-compact" style="flex:1;">
-                    <span class="metric-label-compact">👤 P2 (Marcella) - Gastos</span>
-                    <span class="metric-value-compact">R$ {gasto_p2:,.2f}</span>
-                </div>
-            </div>
-        </div>
-    """
-    st.markdown(html_metrics, unsafe_allow_html=True)
+    mp1, mp2 = st.columns(2)
+    mp1.metric("👤 P1 Renda", f"R$ {renda_p1:,.2f}")
+    mp2.metric("👤 P1 Gastos", f"R$ {gasto_p1:,.2f}")
+
+    mp3, mp4 = st.columns(2)
+    mp3.metric("👤 P2 Renda", f"R$ {renda_p2:,.2f}")
+    mp4.metric("👤 P2 Gastos", f"R$ {gasto_p2:,.2f}")
 
     st.divider()
 
