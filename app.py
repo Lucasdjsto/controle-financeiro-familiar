@@ -689,17 +689,24 @@ with tab_consolidado:
     
     st.subheader("📦 Caixinha de Reserva da Família (Acumulativa)")
     rows_caixinha = []
+    acumulado_temp = 0.0
     for mes in meses_visiveis:
         val = df_caixinha_all[df_caixinha_all['mes_ano'] == mes]['valor'] if not df_caixinha_all.empty else pd.Series()
         val_aporte = safe_float(val.iloc[0]) if not val.empty else 0.0
-        rows_caixinha.append({"Mês": mes, "Aporte do Mês (R$)": val_aporte})
+        acumulado_temp += val_aporte
+        rows_caixinha.append({
+            "Mês": mes, 
+            "Aporte do Mês (R$)": val_aporte,
+            "Total Acumulado na Caixinha (R$)": acumulado_temp
+        })
         
     df_caixinha_grid = pd.DataFrame(rows_caixinha)
     df_caixinha_edit = st.data_editor(
         df_caixinha_grid, num_rows="fixed", use_container_width=True, key="caixinha_editor", height=200,
         column_config={
             "Mês": st.column_config.TextColumn("Mês", disabled=True),
-            "Aporte do Mês (R$)": st.column_config.NumberColumn("Aporte do Mês (R$)", format="R$ %.2f", min_value=0.0)
+            "Aporte do Mês (R$)": st.column_config.NumberColumn("Aporte do Mês (R$)", format="R$ %.2f", min_value=0.0),
+            "Total Acumulado na Caixinha (R$)": st.column_config.NumberColumn("Total Acumulado na Caixinha (R$)", format="R$ %.2f", disabled=True)
         }
     )
     st.session_state["caixinha_df"] = df_caixinha_edit
