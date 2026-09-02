@@ -252,7 +252,6 @@ ESTRUTURA_CARTÕES = {
     "Pessoa 2": ["Banco do Brasil", "Rico", "C6", "Amazon"]
 }
 
-# Mantém a linha original "Receita Extra" e adiciona as novas variações
 ESTRUTURA_RECEITAS = ["Salário Base", "Receita Extra", "Receita Extra 1", "Receita Extra 2"]
 
 # 7. Funções de Leitura Otimizadas em Lote (Cache de 5 minutos)
@@ -374,7 +373,7 @@ def salvar_caixinha(df_editado):
                 ON CONFLICT (mes_ano)
                 DO UPDATE SET valor = EXCLUDED.valor;
             '''
-            conn.execute(text(query), {"mes": mes, "val": val})
+            conn.execute(text(query), {"mes": mes_b, "val": val})
 
 def salvar_programado_cartao(pessoa, df_editado):
     with engine.begin() as conn:
@@ -614,7 +613,6 @@ tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
 ])
 
 def renderizar_pessoa(pessoa, p_code):
-    # 1. RECEITAS COM TOTALIZADOR E LINHAS RESTAURADAS
     st.subheader("💵 1. Receitas (Salário e Rendimentos)")
     rows_rec = []
     for item in ESTRUTURA_RECEITAS:
@@ -625,7 +623,7 @@ def renderizar_pessoa(pessoa, p_code):
             row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
         rows_rec.append(row_dict)
     
-    row_total_rec = {"Item": "➕ Total Receitas do Mes"}
+    row_total_rec = {"Item": "➕ Total Receitas do Mês"}
     for mes_t in meses_visiveis:
         soma_rec = sum(safe_float(r.get(mes_t)) for r in rows_rec)
         row_total_rec[mes_t] = soma_rec
@@ -637,14 +635,13 @@ def renderizar_pessoa(pessoa, p_code):
     conf_rec["Item"] = st.column_config.TextColumn("Item / Descrição", disabled=True)
 
     df_rec_edit = st.data_editor(
-        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=170,
+        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=190,
         column_config=conf_rec
     )
     st.session_state[f"rec_{p_code}_df"] = df_rec_edit
 
     st.divider()
 
-    # 2. CARTÕES COM TOTALIZADOR
     st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
     
     mes_b_atual = mes_tela_para_banco(mes_atual)
