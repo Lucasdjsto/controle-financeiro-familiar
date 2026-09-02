@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -209,7 +210,7 @@ def init_db():
 init_db()
 
 # 6. GERADOR DINÂMICO DE MESES E ESTRUTURAS
-def gerar_linha_tempo_dinamica(mes_inicio_str="08.2026", quantidade_meses=36):
+def gerar_linha_tempo_dinamica(mes_inicio_str="08.2026", quantidade_meses=48):
     m_init, y_init = map(int, mes_inicio_str.split("."))
     meses = []
     curr_m, curr_y = m_init, y_init
@@ -466,10 +467,16 @@ with col_logout_btn:
         st.session_state["autenticado"] = False
         st.rerun()
 
-# CONTROLES TEMPORAIS
+# CONTROLES TEMPORAIS (Inicia automaticamente no mês atual real: 09.2026)
+mes_atual_padrao = datetime.now().strftime("%m.%Y")
+if mes_atual_padrao not in TODOS_MESES_SISTEMA:
+    mes_atual_padrao = "09.2026"
+
+idx_padrao = TODOS_MESES_SISTEMA.index(mes_atual_padrao) if mes_atual_padrao in TODOS_MESES_SISTEMA else 1
+
 c_sel1, c_sel2, c_reset = st.columns([5, 4, 3])
 with c_sel1:
-    mes_atual = st.selectbox("📅 Selecione o Mês Atual de Trabalho (Arquiva Anteriores):", TODOS_MESES_SISTEMA[:24], index=0)
+    mes_atual = st.selectbox("📅 Mês Atual (Referência Extrato Bancário):", TODOS_MESES_SISTEMA[:36], index=idx_padrao)
     st.session_state["mes_atual_sel"] = mes_atual
 with c_sel2:
     modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
@@ -499,7 +506,7 @@ with st.expander("➕ **Registrar Novo Gasto Rápido (PIX / Dinheiro)**", expand
             pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
             cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
             
-        mes_target = st.selectbox("Mês de Referência", TODOS_MESES_SISTEMA[:24], index=TODOS_MESES_SISTEMA.index(mes_atual))
+        mes_target = st.selectbox("Mês de Referência", TODOS_MESES_SISTEMA[:36], index=TODOS_MESES_SISTEMA.index(mes_atual))
         btn_salvar_gasto = st.form_submit_button("💾 Salvar Gasto", type="primary", use_container_width=True)
         
         if btn_salvar_gasto:
@@ -679,7 +686,7 @@ with tab_p2:
     renderizar_pessoa("Pessoa 2", "p2")
 
 with tab_comuns:
-    st.header("🏡 Despesas Comuns do Casa / Casa")
+    st.header("🏡 Despesas Comuns do Casal / Casa")
     df_comuns_edit = st.data_editor(
         df_comuns_all, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
         column_config={
