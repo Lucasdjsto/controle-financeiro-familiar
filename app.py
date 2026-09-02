@@ -414,8 +414,11 @@ def calcular_sequencia_financeira():
         r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         renda_mes = r_p1 + r_p2
 
-        cartoes_p1_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 1"] + [c for c in df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist() if c not in ESTRUTURA_CARTÕES_BASE["Pessoa 1"]]
-        cartoes_p2_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 2"] + [c for c in df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist() if c not in ESTRUTURA_CARTÕES_BASE["Pessoa 2"]]
+        raw_cartoes_p1 = df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
+        raw_cartoes_p2 = df_proj_all[(df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
+
+        cartoes_p1_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 1"] + [c for c in raw_cartoes_p1 if c not in ESTRUTURA_CARTÕES_BASE["Pessoa 1"] and "Total" not in c]
+        cartoes_p2_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 2"] + [c for c in raw_cartoes_p2 if c not in ESTRUTURA_CARTÕES_BASE["Pessoa 2"] and "Total" not in c]
 
         c_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p1_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         c_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p2_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
@@ -666,8 +669,9 @@ def renderizar_pessoa(pessoa, p_code):
         st.rerun()
 
     cartoes_salvos = df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == 'CARTAO')]['item'].unique().tolist()
-    # Remove duplicatas preservando a ordem limpa
-    lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + [c for c in cartoes_salvos if c not in ESTRUTURA_CARTÕES_BASE[pessoa]]))
+    # Limpa rigorosamente qualquer item duplicado ou que contenha a palavra Total
+    lista_cartoes_limpa = [c for c in cartoes_salvos if "Total" not in c and c not in ESTRUTURA_CARTÕES_BASE[pessoa]]
+    lista_cartoes_final = list(dict.fromkeys(ESTRUTURA_CARTÕES_BASE[pessoa] + lista_cartoes_limpa))
 
     rows_cart = []
     for item in lista_cartoes_final:
