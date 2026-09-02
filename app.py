@@ -232,7 +232,7 @@ def init_db():
 
 init_db()
 
-# 6. GERADOR DINÂMICO DE MESES E ESTRUTURAS (Exibição deslocada para a tela)
+# 6. GERADOR DINÂMICO DE MESES E ESTRUTURAS
 def gerar_linha_tempo_tela(mes_inicio_str="09.2026", quantidade_meses=48):
     m_init, y_init = map(int, mes_inicio_str.split("."))
     meses = []
@@ -252,10 +252,7 @@ ESTRUTURA_CARTÕES = {
     "Pessoa 2": ["Banco do Brasil", "Rico", "C6", "Amazon"]
 }
 
-ESTRUTURA_RECEITAS = {
-    "Pessoa 1": ["Salário Base", "Receita Extra"],
-    "Pessoa 2": ["Salário Base", "Receita Extra"]
-}
+ESTRUTURA_RECEITAS = ["Salário Base", "Receita Extra 1", "Receita Extra 2"]
 
 # 7. Funções de Leitura Otimizadas em Lote (Cache de 5 minutos)
 @st.cache_data(ttl=300)
@@ -292,11 +289,13 @@ def get_programado_cartao(pessoa):
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# 8. Funções de Escrita (Mapeando de volta para o mês do banco)
+# 8. Funções de Escrita
 def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis):
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
             item = str(row['Item'])
+            if item.startswith("Total"):
+                continue
             for mes_t in meses_visiveis:
                 mes_b = mes_tela_para_banco(mes_t)
                 val = safe_float(row[mes_t])
@@ -406,7 +405,6 @@ def calcular_sequencia_financeira():
     saldo_acumulado_anterior = 0.0
     caixinha_acumulada_geral = 0.0
 
-    # Gera a linha de tempo interna do banco a partir de 08.2026 para puxar os dados salvos
     meses_banco_seq = gerar_linha_tempo_tela("08.2026", 48)
 
     for m_b in meses_banco_seq:
@@ -500,7 +498,7 @@ with col_logout_btn:
         st.session_state["autenticado"] = False
         st.rerun()
 
-# CONTROLES TEMPORAIS (Inicia em 09.2026 na tela)
+# CONTROLES TEMPORAIS
 idx_padrao = TODOS_MESES_TELA.index("09.2026") if "09.2026" in TODOS_MESES_TELA else 0
 
 c_sel1, c_sel2, c_reset = st.columns([5, 4, 3])
@@ -615,25 +613,40 @@ tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
 ])
 
 def renderizar_pessoa(pessoa, p_code):
+    # 1. RECEITAS COM TOTALIZADOR
     st.subheader("💵 1. Receitas (Salário e Rendimentos)")
+    df_rec_db = get_projecao(pessoa, "RECEITA", meses_visiveis[0]) # Busca base
     rows_rec = []
-    for item in ESTRUTURA_RECEITAS[pessoa]:
+    for item in ESTRUTURA_RECEITAS:
         row_dict = {"Item": item}
         for mes_t in meses_visiveis:
-            df_rec_db = get_projecao(pessoa, "RECEITA", mes_t)
-            val = df_rec_db[df_rec_db['item'] == item]['valor']
+            df_item = get_projecao(pessoa, "RECEITA", mes_t)
+            val = df_item[df_item['item'] == item]['valor']
             row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
         rows_rec.append(row_dict)
     
+    # Linha de Total Calculada para Receitas
+    row_total_rec = {"Item": "➕ Total Receitas do Mês"}
+    for mes_t in meses_visiveis:
+        soma_rec = sum(safe_float(r.get(mes_t)) for r in rows_rec)
+        row_total_rec[mes_t] = soma_rec
+    rows_rec.append(row_total_rec)
+
     df_rec_grid = pd.DataFrame(rows_rec)
+    
+    # Configuração para desabilitar a edição da linha de total
+    conf_rec = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
+    conf_rec["Item"] = st.column_config.TextColumn("Item / Descrição", disabled=True)
+
     df_rec_edit = st.data_editor(
-        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=120,
-        column_config={mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
+        df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=150,
+        column_config=conf_rec
     )
     st.session_state[f"rec_{p_code}_df"] = df_rec_edit
 
     st.divider()
 
+    # 2. CARTÕES COM TOTALIZADOR
     st.subheader("💳 2. Evolução das Faturas de Cartão de Crédito")
     
     mes_b_atual = mes_tela_para_banco(mes_atual)
@@ -663,10 +676,21 @@ def renderizar_pessoa(pessoa, p_code):
             row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
         rows_cart.append(row_dict)
         
+    # Linha de Total Calculada para Cartões
+    row_total_cart = {"Item": "💳 Total Cartões do Mês"}
+    for mes_t in meses_visiveis:
+        soma_cart = sum(safe_float(c.get(mes_t)) for c in rows_cart)
+        row_total_cart[mes_t] = soma_cart
+    rows_cart.append(row_total_cart)
+
     df_cart_grid = pd.DataFrame(rows_cart)
+    
+    conf_cart = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
+    conf_cart["Item"] = st.column_config.TextColumn("Cartão", disabled=True)
+
     df_cart_edit = st.data_editor(
-        df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=170,
-        column_config={mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
+        df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=190,
+        column_config=conf_cart
     )
     st.session_state[f"cart_{p_code}_df"] = df_cart_edit
 
@@ -738,18 +762,24 @@ with tab_consolidado:
     st.subheader("📦 Caixinha de Reserva da Família (Acumulativa)")
     
     rows_caixinha = []
+    acumulado_total_geral = 0.0
+    acumulado_por_mes = {}
+    
+    for m_item in TODOS_MESES_TELA:
+        val_db = df_caixinha_all[df_caixinha_all['mes_ano'] == mes_tela_para_banco(m_item)]['valor'] if not df_caixinha_all.empty else pd.Series()
+        val_aporte = safe_float(val_db.iloc[0]) if not val_db.empty else 0.0
+        acumulado_total_geral += val_aporte
+        acumulado_por_mes[m_item] = acumulado_total_geral
+
     for mes_t in meses_visiveis:
-        mes_b = mes_tela_para_banco(mes_t)
-        val = df_caixinha_all[df_caixinha_all['mes_ano'] == mes_b]['valor'] if not df_caixinha_all.empty else pd.Series()
+        val = df_caixinha_all[df_caixinha_all['mes_ano'] == mes_tela_para_banco(mes_t)]['valor'] if not df_caixinha_all.empty else pd.Series()
         val_aporte = safe_float(val.iloc[0]) if not val.empty else 0.0
-        
-        d_m = dados_financeiros.get(mes_t, {})
-        total_acum = d_m.get("caixinha_acumulada", 0.0)
+        total_ate_mes = acumulado_por_mes.get(mes_t, 0.0)
         
         rows_caixinha.append({
             "Mês": mes_t, 
             "Aporte do Mês (R$)": val_aporte,
-            "Total Acumulado na Caixinha (R$)": total_acum
+            "Total Acumulado na Caixinha (R$)": total_ate_mes
         })
         
     df_caixinha_grid = pd.DataFrame(rows_caixinha)
