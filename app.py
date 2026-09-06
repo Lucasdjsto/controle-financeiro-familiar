@@ -5,9 +5,9 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 # 1. Configuração da Página
-st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide")
+st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide", initial_sidebar_state="collapsed")
 
-# 2. Injeção de CSS otimizado para Grade Lado a Lado (Celular e Notebook)
+# 2. Injeção de CSS otimizado para alta performance e fluidez no celular
 st.markdown("""
     <style>
         .block-container {
@@ -25,7 +25,6 @@ st.markdown("""
             padding: 2px 4px !important;
         }
         
-        /* Mini Cards em Grade para o Painel */
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -34,9 +33,7 @@ st.markdown("""
             margin-bottom: 0.5rem;
         }
         
-        .metric-box {
-            background-color: #111827;
-            border: 1px solid #1f2937;
+        .metric-box, .metric-box-reserva, .metric-box-final, .metric-box-patrimonio {
             border-radius: 6px;
             padding: 6px 8px;
             display: flex;
@@ -44,49 +41,13 @@ st.markdown("""
             justify-content: center;
         }
 
-        .metric-box-reserva {
-            background-color: #0c2340;
-            border: 1px solid #0284c7;
-            border-radius: 6px;
-            padding: 6px 8px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .metric-box-final {
-            background-color: #1e1b4b;
-            border: 1px solid #6366f1;
-            border-radius: 6px;
-            padding: 6px 8px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .metric-box-patrimonio {
-            background-color: #422006;
-            border: 1px solid #d97706;
-            border-radius: 6px;
-            padding: 6px 8px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            grid-column: span 2;
-        }
+        .metric-box { background-color: #111827; border: 1px solid #1f2937; }
+        .metric-box-reserva { background-color: #0c2340; border: 1px solid #0284c7; }
+        .metric-box-final { background-color: #1e1b4b; border: 1px solid #6366f1; }
+        .metric-box-patrimonio { background-color: #422006; border: 1px solid #d97706; grid-column: span 2; }
         
-        .metric-title {
-            font-size: 0.62rem;
-            color: #9ca3af;
-            font-weight: 500;
-            margin-bottom: 2px;
-        }
-        
-        .metric-val {
-            font-size: 0.82rem;
-            font-weight: 700;
-            color: #f3f4f6;
-        }
+        .metric-title { font-size: 0.62rem; color: #9ca3af; font-weight: 500; margin-bottom: 2px; }
+        .metric-val { font-size: 0.82rem; font-weight: 700; color: #f3f4f6; }
 
         .stButton > button {
             border-radius: 5px;
@@ -96,17 +57,12 @@ st.markdown("""
         }
 
         @media (min-width: 768px) {
-            .metrics-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-            .metric-box-patrimonio {
-                grid-column: span 3;
-            }
+            .metrics-grid { grid-template-columns: repeat(3, 1fr); }
+            .metric-box-patrimonio { grid-column: span 3; }
         }
     </style>
 """, unsafe_allow_html=True)
 
-# Helper seguro para conversão de números
 def safe_float(val, default=0.0):
     try:
         if pd.isna(val) or val is None or str(val).strip() == "":
@@ -115,7 +71,6 @@ def safe_float(val, default=0.0):
     except (ValueError, TypeError):
         return default
 
-# Funções de Conversão de Mês Visual para Banco
 def mes_banco_para_tela(mes_banco):
     try:
         m, y = map(int, mes_banco.split("."))
@@ -158,13 +113,13 @@ def verificar_senha():
                 st.success("Acesso liberado!")
                 st.rerun()
             else:
-                st.error("Senha incorreta! Tente novamente.")
+                st.error("Senha incorreta!")
     return False
 
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão Otimizada com Pooler do Supabase
+# 4. Conexão Super Otimizada e Anti-Queda com Supabase
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -176,82 +131,59 @@ def get_db_engine():
     
     return create_engine(
         db_url,
-        pool_size=3,
-        max_overflow=2,
-        pool_recycle=300,
-        pool_pre_ping=True,
-        connect_args={"connect_timeout": 10}
+        pool_size=2,
+        max_overflow=3,
+        pool_recycle=60,         # Recicla conexões ociosas a cada 60s para evitar timeout do Supabase
+        pool_pre_ping=True,      # Testa a conexão antes de executar comandos (evita crash no meio da escrita)
+        connect_args={"connect_timeout": 5}
     )
 
 engine = get_db_engine()
 
-# 5. Inicialização das Tabelas no Banco
 def init_db():
     try:
         with engine.begin() as conn:
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS projecao (
-                    pessoa TEXT,
-                    tipo TEXT,
-                    item TEXT,
-                    mes_ano TEXT,
+                    pessoa TEXT, tipo TEXT, item TEXT, mes_ano TEXT,
                     valor DOUBLE PRECISION DEFAULT 0,
                     PRIMARY KEY (pessoa, tipo, item, mes_ano)
                 );
             '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS gastos_fixos (
-                    id SERIAL PRIMARY KEY,
-                    pessoa TEXT,
-                    item TEXT,
-                    valor DOUBLE PRECISION DEFAULT 0
+                    id SERIAL PRIMARY KEY, pessoa TEXT, item TEXT, valor DOUBLE PRECISION DEFAULT 0
                 );
             '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS gastos_comuns (
-                    id SERIAL PRIMARY KEY,
-                    item TEXT,
-                    valor DOUBLE PRECISION DEFAULT 0,
-                    pagador TEXT DEFAULT 'Dividido (50/50)'
+                    id SERIAL PRIMARY KEY, item TEXT, valor DOUBLE PRECISION DEFAULT 0, pagador TEXT DEFAULT 'Dividido (50/50)'
                 );
             '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS pontuais_dinheiro (
-                    id SERIAL PRIMARY KEY,
-                    mes_ano TEXT,
-                    pessoa TEXT,
-                    descricao TEXT,
-                    categoria TEXT,
-                    valor DOUBLE PRECISION DEFAULT 0
+                    id SERIAL PRIMARY KEY, mes_ano TEXT, pessoa TEXT, descricao TEXT, categoria TEXT, valor DOUBLE PRECISION DEFAULT 0
                 );
             '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS caixinha (
-                    mes_ano TEXT PRIMARY KEY,
-                    valor DOUBLE PRECISION DEFAULT 0
+                    mes_ano TEXT PRIMARY KEY, valor DOUBLE PRECISION DEFAULT 0
                 );
             '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS programado_cartao (
-                    id SERIAL PRIMARY KEY,
-                    pessoa TEXT,
-                    cartao TEXT,
-                    descricao TEXT,
-                    valor DOUBLE PRECISION DEFAULT 0
+                    id SERIAL PRIMARY KEY, pessoa TEXT, cartao TEXT, descricao TEXT, valor DOUBLE PRECISION DEFAULT 0
                 );
             '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS status_faturas (
-                    pessoa TEXT,
-                    mes_ano TEXT,
-                    fechada BOOLEAN DEFAULT FALSE,
+                    pessoa TEXT, mes_ano TEXT, fechada BOOLEAN DEFAULT FALSE,
                     PRIMARY KEY (pessoa, mes_ano)
                 );
             '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS preferencias (
-                    chave TEXT PRIMARY KEY,
-                    valor TEXT
+                    chave TEXT PRIMARY KEY, valor TEXT
                 );
             '''))
     except Exception as e:
@@ -259,7 +191,6 @@ def init_db():
 
 init_db()
 
-# Funções de Memória do Último Mês
 def carregar_ultimo_mes_salvo(default="09.2026"):
     try:
         with engine.connect() as conn:
@@ -280,7 +211,6 @@ def salvar_ultimo_mes_banco(mes_tela):
     except:
         pass
 
-# 6. GERADOR DINÂMICO DE MESES E ESTRUTURAS
 def gerar_linha_tempo_tela(mes_inicio_str="09.2026", quantidade_meses=48):
     m_init, y_init = map(int, mes_inicio_str.split("."))
     meses = []
@@ -302,8 +232,8 @@ ESTRUTURA_CARTÕES_BASE = {
 
 ESTRUTURA_RECEITAS = ["Salário Base", "Receita Extra", "Receita Extra 1", "Receita Extra 2"]
 
-# 7. Funções de Leitura Otimizadas em Lote
-@st.cache_data(ttl=300)
+# Leitura Otimizada com cache leve para evitar lentidão ao mudar de tela
+@st.cache_data(ttl=60, show_spinner=False)
 def carregar_dados_globais():
     with engine.connect() as conn:
         df_proj = pd.read_sql(text("SELECT * FROM projecao"), conn)
@@ -337,7 +267,7 @@ def get_programado_cartao(pessoa):
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# 8. Funções de Escrita
+# Funções de Escrita com Tratamento de Erro Robusto
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -368,6 +298,7 @@ def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
                 '''
                 conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": val})
     salvar_ultimo_mes_banco(mes_atual_foco)
+    st.cache_data.clear()
 
 def salvar_fixos(pessoa, df_editado, mes_atual_foco):
     with engine.begin() as conn:
@@ -377,6 +308,7 @@ def salvar_fixos(pessoa, df_editado, mes_atual_foco):
                 query = "INSERT INTO gastos_fixos (pessoa, item, valor) VALUES (:pessoa, :item, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "val": safe_float(row['valor'])})
     salvar_ultimo_mes_banco(mes_atual_foco)
+    st.cache_data.clear()
 
 def salvar_comuns(df_editado, mes_atual_foco):
     with engine.begin() as conn:
@@ -387,6 +319,7 @@ def salvar_comuns(df_editado, mes_atual_foco):
                 query = "INSERT INTO gastos_comuns (item, valor, pagador) VALUES (:item, :val, :pag)"
                 conn.execute(text(query), {"item": str(row['item']), "val": safe_float(row['valor']), "pag": pag})
     salvar_ultimo_mes_banco(mes_atual_foco)
+    st.cache_data.clear()
 
 def salvar_status_fatura(pessoa, mes_tela, fechada):
     mes_b = mes_tela_para_banco(mes_tela)
@@ -399,6 +332,7 @@ def salvar_status_fatura(pessoa, mes_tela, fechada):
         '''
         conn.execute(text(query), {"pessoa": pessoa, "mes_ano": mes_b, "fechada": fechada})
     salvar_ultimo_mes_banco(mes_tela)
+    st.cache_data.clear()
 
 def resetar_todos_status_faturas():
     with engine.begin() as conn:
@@ -413,11 +347,8 @@ def inserir_gasto_rapido(mes_tela, pessoa, descricao, categoria, valor):
             VALUES (:mes_ano, :pessoa, :descricao, :categoria, :valor)
         '''
         conn.execute(text(query), {
-            "mes_ano": mes_b,
-            "pessoa": pessoa,
-            "descricao": descricao,
-            "categoria": categoria,
-            "valor": safe_float(valor)
+            "mes_ano": mes_b, "pessoa": pessoa, "descricao": descricao,
+            "categoria": categoria, "valor": safe_float(valor)
         })
     salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
@@ -441,6 +372,7 @@ def salvar_caixinha(df_editado, mes_atual_foco):
             '''
             conn.execute(text(query), {"mes": mes_b, "val": val})
     salvar_ultimo_mes_banco(mes_atual_foco)
+    st.cache_data.clear()
 
 def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
     with engine.begin() as conn:
@@ -453,8 +385,9 @@ def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
                 query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
     salvar_ultimo_mes_banco(mes_atual_foco)
+    st.cache_data.clear()
 
-# 9. LÓGICA DE CÁLCULO FINANCEIRO
+# Lógica de Cálculo Financeiro Otimizada
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
@@ -488,8 +421,7 @@ def calcular_sequencia_financeira():
         c_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p1_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         c_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'CARTAO') & (df_proj_all['item'].isin(cartoes_p2_validos))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         
-        f1_fechada = False
-        f2_fechada = False
+        f1_fechada, f2_fechada = False, False
         if not df_status_all.empty:
             st1 = df_status_all[(df_status_all['pessoa'] == 'Pessoa 1') & (df_status_all['mes_ano'] == m_b)]
             f1_fechada = bool(st1['fechada'].iloc[0]) if not st1.empty else False
@@ -518,27 +450,20 @@ def calcular_sequencia_financeira():
         patrimonio_total_final = saldo_conta_final + caixinha_acumulada_geral
 
         dados_meses[m_t] = {
-            "saldo_anterior": saldo_acumulado_anterior,
-            "renda_mes": renda_mes,
-            "renda_p1": r_p1,
-            "renda_p2": r_p2,
-            "gasto_p1": gasto_exclusivo_p1,
-            "gasto_p2": gasto_exclusivo_p2,
-            "saidas_mes": saidas_mes,
-            "caixinha_mes": caixinha_mes,
-            "caixinha_acumulada": caixinha_acumulada_geral,
-            "sobra_mes_isolada": sobra_do_mes_bruta,
-            "saldo_acumulado_final": saldo_conta_final,
+            "saldo_anterior": saldo_acumulado_anterior, "renda_mes": renda_mes,
+            "renda_p1": r_p1, "renda_p2": r_p2, "gasto_p1": gasto_exclusivo_p1,
+            "gasto_p2": gasto_exclusivo_p2, "saidas_mes": saidas_mes,
+            "caixinha_mes": caixinha_mes, "caixinha_acumulada": caixinha_acumulada_geral,
+            "sobra_mes_isolada": sobra_do_mes_bruta, "saldo_acumulado_final": saldo_conta_final,
             "patrimonio_total_final": patrimonio_total_final
         }
-
         saldo_acumulado_anterior = saldo_conta_final
 
     return dados_meses
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 10. MENU LATERAL (SIDEBAR) PARA CONTROLE TOTAL (Modo, Mês, Salvar, Sair)
+# 10. MENU LATERAL (SIDEBAR) OTIMIZADO
 with st.sidebar:
     st.markdown("### ⚙️ Menu de Controle")
     
@@ -558,17 +483,12 @@ with st.sidebar:
         if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"], mes_foco_atual)
         
         salvar_ultimo_mes_banco(mes_foco_atual)
-        st.cache_data.clear()
         st.success("Salvo com sucesso!")
         st.rerun()
 
     st.divider()
 
-    modo_visao = st.radio(
-        "Modo de Navegação:", 
-        ["⚡ Modo Rápido (Dia a Dia)", "📈 Projeção Longo Prazo"], 
-        index=0
-    )
+    modo_visao = st.radio("Modo de Navegação:", ["⚡ Modo Rápido (Dia a Dia)", "📈 Projeção Longo Prazo"], index=0)
 
     st.divider()
 
@@ -583,7 +503,7 @@ with st.sidebar:
         st.divider()
         modo_exibicao = st.radio("🔍 Horizonte Futuro:", ["6 Meses", "12 Meses"], index=0, horizontal=True)
         st.write("")
-        if st.button("🔄 Resetar Status Faturas", help="Limpa do banco todos os status de Fatura Fechada acumulados", use_container_width=True):
+        if st.button("🔄 Resetar Status Faturas", use_container_width=True):
             resetar_todos_status_faturas()
             st.success("Status resetados!")
             st.rerun()
@@ -608,7 +528,7 @@ d_foco = dados_financeiros.get(mes_atual, {
 })
 
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO (PAINEL EM GRADE LADO A LADO)
+# SEÇÃO 1: MODO RÁPIDO
 # ====================================================================
 if modo_visao.startswith("⚡"):
     st.markdown(f"### ⚡ Painel Diário Rápido — **{mes_atual}**")
@@ -617,7 +537,6 @@ if modo_visao.startswith("⚡"):
     caixinha_acum = d_foco['caixinha_acumulada']
     patrimonio_final = d_foco['patrimonio_total_final']
 
-    # Painel otimizado em Grade (Lado a lado, compacto e esteticamente limpo)
     st.markdown(f"""
         <div class="metrics-grid">
             <div class="metric-box">
@@ -681,7 +600,6 @@ if modo_visao.startswith("⚡"):
             if st.form_submit_button(f"💾 Salvar P1 ({mes_atual})", type="primary", use_container_width=True):
                 for cartao, val in valores_p1.items():
                     salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
-                st.cache_data.clear()
                 st.success("Salvo!")
                 st.rerun()
 
@@ -699,7 +617,6 @@ if modo_visao.startswith("⚡"):
             if st.form_submit_button(f"💾 Salvar P2 ({mes_atual})", type="primary", use_container_width=True):
                 for cartao, val in valores_p2.items():
                     salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
-                st.cache_data.clear()
                 st.success("Salvo!")
                 st.rerun()
 
@@ -733,7 +650,6 @@ else:
     caixinha_acum = d_foco['caixinha_acumulada']
     patrimonio_final = d_foco['patrimonio_total_final']
 
-    # Mesma grade lado a lado aplicada no modo completo
     st.markdown(f"""
         <div class="metrics-grid">
             <div class="metric-box">
@@ -829,13 +745,12 @@ else:
             st.session_state[key_chk] = is_closed_db
 
         chk_fechada = st.checkbox(
-            f"✅ Fatura de {mes_atual} Fechada / Processada (Desliga Provisões de {pessoa})", 
+            f"✅ Fatura de {mes_atual} Fechada / Processada", 
             key=key_chk
         )
         
         if chk_fechada != is_closed_db:
             salvar_status_fatura(pessoa, mes_atual, chk_fechada)
-            st.cache_data.clear()
             st.rerun()
 
         lista_cartoes_final = ESTRUTURA_CARTÕES_BASE[pessoa]
@@ -868,7 +783,7 @@ else:
 
         st.divider()
 
-        st.subheader("🔮 3. Lançamentos Programados no Cartão (Seguros / Assinaturas Futuras)")
+        st.subheader("🔮 3. Lançamentos Programados no Cartão")
         df_prog_cart = get_programado_cartao(pessoa)
         df_prog_edit = st.data_editor(
             df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}", height=150,
