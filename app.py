@@ -236,7 +236,7 @@ ESTRUTURA_CARTÕES_BASE = {
 
 ESTRUTURA_RECEITAS = ["Salário Base", "Receita Extra", "Receita Extra 1", "Receita Extra 2"]
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def carregar_dados_globais():
     with engine.connect() as conn:
         df_proj = pd.read_sql(text("SELECT * FROM projecao"), conn)
@@ -249,11 +249,11 @@ def carregar_dados_globais():
     
     if 'pagador' not in df_comuns.columns:
         df_comuns['pagador'] = 'Dividido (50/50)'
-    if 'mes_ano' not in df_fixos.columns:
+    if 'mes_ano' not in df_fixos.columns or df_fixos['mes_ano'].isnull().all():
         df_fixos['mes_ano'] = '08.2026'
-    if 'mes_ano' not in df_comuns.columns:
+    if 'mes_ano' not in df_comuns.columns or df_comuns['mes_ano'].isnull().all():
         df_comuns['mes_ano'] = '08.2026'
-    if 'mes_ano' not in df_prog.columns:
+    if 'mes_ano' not in df_prog.columns or df_prog['mes_ano'].isnull().all():
         df_prog['mes_ano'] = '08.2026'
         
     return df_proj, df_fixos, df_comuns, df_pontuais, df_caixinha, df_prog, df_status
@@ -277,21 +277,6 @@ def get_fixos_mes(pessoa, mes_banco):
     df_mes = df_p[df_p['mes_ano'] == mes_banco]
     if not df_mes.empty:
         return df_mes[['id', 'item', 'valor']]
-    
-    try:
-        meses_unicos = df_p['mes_ano'].dropna().unique()
-        meses_ordenados = sorted(meses_unicos, key=lambda x: datetime.strptime(x, "%m.%Y"))
-        meses_anteriores = [m for m in meses_ordenados if datetime.strptime(m, "%m.%Y") < datetime.strptime(mes_banco, "%m.%Y")]
-    except:
-        meses_anteriores = []
-    
-    if meses_anteriores:
-        ultimo_mes = meses_anteriores[-1]
-        df_ant = df_p[df_p['mes_ano'] == ultimo_mes]
-        if not df_ant.empty:
-            df_copia = df_ant[['item', 'valor']].copy()
-            df_copia['id'] = None
-            return df_copia
             
     return pd.DataFrame(columns=['id', 'item', 'valor'])
 
@@ -302,21 +287,6 @@ def get_comuns_mes(mes_banco):
     df_mes = df_comuns_all[df_comuns_all['mes_ano'] == mes_banco]
     if not df_mes.empty:
         return df_mes[['id', 'item', 'valor', 'pagador']]
-        
-    try:
-        meses_unicos = df_comuns_all['mes_ano'].dropna().unique()
-        meses_ordenados = sorted(meses_unicos, key=lambda x: datetime.strptime(x, "%m.%Y"))
-        meses_anteriores = [m for m in meses_ordenados if datetime.strptime(m, "%m.%Y") < datetime.strptime(mes_banco, "%m.%Y")]
-    except:
-        meses_anteriores = []
-    
-    if meses_anteriores:
-        ultimo_mes = meses_anteriores[-1]
-        df_ant = df_comuns_all[df_comuns_all['mes_ano'] == ultimo_mes]
-        if not df_ant.empty:
-            df_copia = df_ant[['item', 'valor', 'pagador']].copy()
-            df_copia['id'] = None
-            return df_copia
             
     return pd.DataFrame(columns=['id', 'item', 'valor', 'pagador'])
 
@@ -331,21 +301,6 @@ def get_programado_cartao_mes(pessoa, mes_banco):
     df_mes = df_p[df_p['mes_ano'] == mes_banco]
     if not df_mes.empty:
         return df_mes[['id', 'cartao', 'descricao', 'valor']]
-        
-    try:
-        meses_unicos = df_p['mes_ano'].dropna().unique()
-        meses_ordenados = sorted(meses_unicos, key=lambda x: datetime.strptime(x, "%m.%Y"))
-        meses_anteriores = [m for m in meses_ordenados if datetime.strptime(m, "%m.%Y") < datetime.strptime(mes_banco, "%m.%Y")]
-    except:
-        meses_anteriores = []
-    
-    if meses_anteriores:
-        ultimo_mes = meses_anteriores[-1]
-        df_ant = df_p[df_p['mes_ano'] == ultimo_mes]
-        if not df_ant.empty:
-            df_copia = df_ant[['cartao', 'descricao', 'valor']].copy()
-            df_copia['id'] = None
-            return df_copia
             
     return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
 
@@ -386,7 +341,7 @@ def salvar_fixos(pessoa, df_editado, mes_tela):
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"), {"pessoa": pessoa, "mes": mes_b})
         for _, row in df_editado.iterrows():
-            if str(row['item']).strip():
+            if pd.notnull(row.get('item')) and str(row['item']).strip():
                 query = "INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor) VALUES (:pessoa, :item, :mes, :val)"
                 conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "mes": mes_b, "val": safe_float(row['valor'])})
     salvar_ultimo_mes_banco(mes_tela)
@@ -397,7 +352,7 @@ def salvar_comuns(df_editado, mes_tela):
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM gastos_comuns WHERE mes_ano = :mes"), {"mes": mes_b})
         for _, row in df_editado.iterrows():
-            if str(row['item']).strip():
+            if pd.notnull(row.get('item')) and str(row['item']).strip():
                 pag = str(row.get('pagador', 'Dividido (50/50)'))
                 query = "INSERT INTO gastos_comuns (item, mes_ano, valor, pagador) VALUES (:item, :mes, :val, :pag)"
                 conn.execute(text(query), {"item": str(row['item']), "mes": mes_b, "val": safe_float(row['valor']), "pag": pag})
