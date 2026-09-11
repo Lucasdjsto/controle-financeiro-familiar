@@ -187,7 +187,6 @@ def init_db():
                 );
             '''))
             
-            # Garante que bases antigas recebam a coluna mes_ano sem apagar dados
             conn.execute(text('ALTER TABLE gastos_fixos ADD COLUMN IF NOT EXISTS mes_ano TEXT;'))
             conn.execute(text('ALTER TABLE gastos_comuns ADD COLUMN IF NOT EXISTS mes_ano TEXT;'))
             conn.execute(text('ALTER TABLE programado_cartao ADD COLUMN IF NOT EXISTS mes_ano TEXT;'))
@@ -268,19 +267,27 @@ def get_projecao(pessoa, tipo, mes_tela):
     return df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == tipo) & (df_proj_all['mes_ano'] == mes_banco)]
 
 def get_fixos_mes(pessoa, mes_banco):
-    if df_fixos_all.empty:
+    if df_fixos_all.empty or 'mes_ano' not in df_fixos_all.columns:
         return pd.DataFrame(columns=['id', 'item', 'valor'])
     
-    df_mes = df_fixos_all[(df_fixos_all['pessoa'] == pessoa) & (df_fixos_all['mes_ano'] == mes_banco)]
+    df_p = df_fixos_all[df_fixos_all['pessoa'] == pessoa]
+    if df_p.empty:
+        return pd.DataFrame(columns=['id', 'item', 'valor'])
+        
+    df_mes = df_p[df_p['mes_ano'] == mes_banco]
     if not df_mes.empty:
         return df_mes[['id', 'item', 'valor']]
     
-    meses_disponiveis = sorted(df_fixos_all[df_fixos_all['pessoa'] == pessoa]['mes_ano'].unique())
-    meses_anteriores = [m for m in meses_disponiveis if m < mes_banco]
+    try:
+        meses_unicos = df_p['mes_ano'].dropna().unique()
+        meses_ordenados = sorted(meses_unicos, key=lambda x: datetime.strptime(x, "%m.%Y"))
+        meses_anteriores = [m for m in meses_ordenados if datetime.strptime(m, "%m.%Y") < datetime.strptime(mes_banco, "%m.%Y")]
+    except:
+        meses_anteriores = []
     
     if meses_anteriores:
         ultimo_mes = meses_anteriores[-1]
-        df_ant = df_fixos_all[(df_fixos_all['pessoa'] == pessoa) & (df_fixos_all['mes_ano'] == ultimo_mes)]
+        df_ant = df_p[df_p['mes_ano'] == ultimo_mes]
         if not df_ant.empty:
             df_copia = df_ant[['item', 'valor']].copy()
             df_copia['id'] = None
@@ -289,15 +296,19 @@ def get_fixos_mes(pessoa, mes_banco):
     return pd.DataFrame(columns=['id', 'item', 'valor'])
 
 def get_comuns_mes(mes_banco):
-    if df_comuns_all.empty:
+    if df_comuns_all.empty or 'mes_ano' not in df_comuns_all.columns:
         return pd.DataFrame(columns=['id', 'item', 'valor', 'pagador'])
     
     df_mes = df_comuns_all[df_comuns_all['mes_ano'] == mes_banco]
     if not df_mes.empty:
         return df_mes[['id', 'item', 'valor', 'pagador']]
         
-    meses_disponiveis = sorted(df_comuns_all['mes_ano'].unique())
-    meses_anteriores = [m for m in meses_disponiveis if m < mes_banco]
+    try:
+        meses_unicos = df_comuns_all['mes_ano'].dropna().unique()
+        meses_ordenados = sorted(meses_unicos, key=lambda x: datetime.strptime(x, "%m.%Y"))
+        meses_anteriores = [m for m in meses_ordenados if datetime.strptime(m, "%m.%Y") < datetime.strptime(mes_banco, "%m.%Y")]
+    except:
+        meses_anteriores = []
     
     if meses_anteriores:
         ultimo_mes = meses_anteriores[-1]
@@ -310,19 +321,27 @@ def get_comuns_mes(mes_banco):
     return pd.DataFrame(columns=['id', 'item', 'valor', 'pagador'])
 
 def get_programado_cartao_mes(pessoa, mes_banco):
-    if df_prog_all.empty:
+    if df_prog_all.empty or 'mes_ano' not in df_prog_all.columns:
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
         
-    df_mes = df_prog_all[(df_prog_all['pessoa'] == pessoa) & (df_prog_all['mes_ano'] == mes_banco)]
+    df_p = df_prog_all[df_prog_all['pessoa'] == pessoa]
+    if df_p.empty:
+        return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
+        
+    df_mes = df_p[df_p['mes_ano'] == mes_banco]
     if not df_mes.empty:
         return df_mes[['id', 'cartao', 'descricao', 'valor']]
         
-    meses_disponiveis = sorted(df_prog_all[df_prog_all['pessoa'] == pessoa]['mes_ano'].unique())
-    meses_anteriores = [m for m in meses_disponiveis if m < mes_banco]
+    try:
+        meses_unicos = df_p['mes_ano'].dropna().unique()
+        meses_ordenados = sorted(meses_unicos, key=lambda x: datetime.strptime(x, "%m.%Y"))
+        meses_anteriores = [m for m in meses_ordenados if datetime.strptime(m, "%m.%Y") < datetime.strptime(mes_banco, "%m.%Y")]
+    except:
+        meses_anteriores = []
     
     if meses_anteriores:
         ultimo_mes = meses_anteriores[-1]
-        df_ant = df_prog_all[(df_prog_all['pessoa'] == pessoa) & (df_prog_all['mes_ano'] == ultimo_mes)]
+        df_ant = df_p[df_p['mes_ano'] == ultimo_mes]
         if not df_ant.empty:
             df_copia = df_ant[['cartao', 'descricao', 'valor']].copy()
             df_copia['id'] = None
@@ -541,15 +560,21 @@ with st.sidebar:
         mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"], mes_foco_atual)
         if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"], mes_foco_atual)
-        if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"], mes_foco_atual)
-        if "prog_p1_df" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1_df"], mes_foco_atual)
+        if f"fix_p1_{mes_foco_atual}" in st.session_state or "fix_p1_df" in st.session_state: 
+            salvar_fixos("Pessoa 1", st.session_state.get(f"fix_p1_{mes_foco_atual}", st.session_state.get("fix_p1_df")), mes_foco_atual)
+        if f"prog_p1_{mes_foco_atual}" in st.session_state or "prog_p1_df" in st.session_state: 
+            salvar_programado_cartao("Pessoa 1", st.session_state.get(f"prog_p1_{mes_foco_atual}", st.session_state.get("prog_p1_df")), mes_foco_atual)
 
         if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"], mes_foco_atual)
         if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"], mes_foco_atual)
-        if "fix_p2_df" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2_df"], mes_foco_atual)
-        if "prog_p2_df" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2_df"], mes_foco_atual)
+        if f"fix_p2_{mes_foco_atual}" in st.session_state or "fix_p2_df" in st.session_state: 
+            salvar_fixos("Pessoa 2", st.session_state.get(f"fix_p2_{mes_foco_atual}", st.session_state.get("fix_p2_df")), mes_foco_atual)
+        if f"prog_p2_{mes_foco_atual}" in st.session_state or "prog_p2_df" in st.session_state: 
+            salvar_programado_cartao("Pessoa 2", st.session_state.get(f"prog_p2_{mes_foco_atual}", st.session_state.get("prog_p2_df")), mes_foco_atual)
 
-        if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"], mes_foco_atual)
+        if f"comuns_editor_{mes_foco_atual}" in st.session_state or "comuns_df" in st.session_state: 
+            salvar_comuns(st.session_state.get(f"comuns_editor_{mes_foco_atual}", st.session_state.get("comuns_df")), mes_foco_atual)
+            
         if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"], mes_foco_atual)
         
         salvar_ultimo_mes_banco(mes_foco_atual)
@@ -864,7 +889,7 @@ else:
                 "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"prog_{p_code}_df"] = df_prog_edit
+        st.session_state[f"prog_{p_code}_{mes_atual}"] = df_prog_edit
 
         st.divider()
 
@@ -878,7 +903,7 @@ else:
                 "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"fix_{p_code}_df"] = df_fixos_edit
+        st.session_state[f"fix_{p_code}_{mes_atual}"] = df_fixos_edit
 
         st.divider()
 
@@ -916,7 +941,7 @@ else:
                 "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
             }
         )
-        st.session_state["comuns_df"] = df_comuns_edit
+        st.session_state[f"comuns_editor_{mes_atual}"] = df_comuns_edit
 
     with tab_consolidado:
         st.header("🏠 Visão Consolidada, Caixinha & Totais")
