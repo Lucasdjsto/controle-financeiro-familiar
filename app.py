@@ -916,7 +916,7 @@ else:
                 c_g1.write(f"**{g['descricao']}**")
                 c_g2.write(f"🏷️ {g['categoria']}")
                 c_g3.write(f"**R$ {safe_float(g['valor']):,.2f}**")
-                if c_g4.button("🗑️", key=f"del_{g['id']}"):
+                if c_g4.button("🗑️", key=f"del_{g['id']}_{p_code}"):
                     deletar_gasto_pontual(g['id'])
                     st.rerun()
         else:
