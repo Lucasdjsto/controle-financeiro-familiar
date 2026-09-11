@@ -558,24 +558,27 @@ with st.sidebar:
     
     if st.button("💾 SALVAR DADOS", type="primary", use_container_width=True):
         mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
-        if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"], mes_foco_atual)
-        if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"], mes_foco_atual)
-        if f"fix_p1_{mes_foco_atual}" in st.session_state: 
-            salvar_fixos("Pessoa 1", st.session_state[f"fix_p1_{mes_foco_atual}"], mes_foco_atual)
-        if f"prog_p1_{mes_foco_atual}" in st.session_state: 
-            salvar_programado_cartao("Pessoa 1", st.session_state[f"prog_p1_{mes_foco_atual}"], mes_foco_atual)
+        
+        # Salva dados coletados de qualquer aba que esteja ativa na sessão
+        for p_code in ["p1", "p2"]:
+            if f"rec_{p_code}_df" in st.session_state:
+                p_nome = "Pessoa 1" if p_code == "p1" else "Pessoa 2"
+                salvar_projecao(p_nome, "RECEITA", st.session_state[f"rec_{p_code}_df"], st.session_state["meses_v"], mes_foco_atual)
+            if f"cart_{p_code}_df" in st.session_state:
+                p_nome = "Pessoa 1" if p_code == "p1" else "Pessoa 2"
+                salvar_projecao(p_nome, "CARTAO", st.session_state[f"cart_{p_code}_df"], st.session_state["meses_v"], mes_foco_atual)
+            if f"fix_{p_code}_Ativo" in st.session_state:
+                p_nome = "Pessoa 1" if p_code == "p1" else "Pessoa 2"
+                salvar_fixos(p_nome, st.session_state[f"fix_{p_code}_Ativo"], mes_foco_atual)
+            if f"prog_{p_code}_Ativo" in st.session_state:
+                p_nome = "Pessoa 1" if p_code == "p1" else "Pessoa 2"
+                salvar_programado_cartao(p_nome, st.session_state[f"prog_{p_code}_Ativo"], mes_foco_atual)
 
-        if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"], mes_foco_atual)
-        if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"], mes_foco_atual)
-        if f"fix_p2_{mes_foco_atual}" in st.session_state: 
-            salvar_fixos("Pessoa 2", st.session_state[f"fix_p2_{mes_foco_atual}"], mes_foco_atual)
-        if f"prog_p2_{mes_foco_atual}" in st.session_state: 
-            salvar_programado_cartao("Pessoa 2", st.session_state[f"prog_p2_{mes_foco_atual}"], mes_foco_atual)
-
-        if f"comuns_editor_{mes_foco_atual}" in st.session_state: 
-            salvar_comuns(st.session_state[f"comuns_editor_{mes_foco_atual}"], mes_foco_atual)
+        if "comuns_Ativo" in st.session_state:
+            salvar_comuns(st.session_state["comuns_Ativo"], mes_foco_atual)
             
-        if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"], mes_foco_atual)
+        if "caixinha_df" in st.session_state:
+            salvar_caixinha(st.session_state["caixinha_df"], mes_foco_atual)
         
         salvar_ultimo_mes_banco(mes_foco_atual)
         st.success("Salvo com sucesso!")
@@ -882,14 +885,14 @@ else:
         st.caption("ℹ️ Editando os lançamentos específicos para o mês selecionado.")
         df_prog_cart = get_programado_cartao_mes(pessoa, mes_b_atual)
         df_prog_edit = st.data_editor(
-            df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}_{mes_atual}", height=150,
+            df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}_Ativo", height=150,
             column_config={
                 "cartao": st.column_config.SelectboxColumn("Cartão", options=lista_cartoes_final),
                 "descricao": st.column_config.TextColumn("Descrição (ex: Seguro, Netflix)"),
                 "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"prog_{p_code}_{mes_atual}"] = df_prog_edit
+        st.session_state[f"prog_{p_code}_Ativo"] = df_prog_edit
 
         st.divider()
 
@@ -897,13 +900,13 @@ else:
         st.caption("ℹ️ Editando os gastos fixos específicos para o mês selecionado.")
         df_fixos_db = get_fixos_mes(pessoa, mes_b_atual)
         df_fixos_edit = st.data_editor(
-            df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}_{mes_atual}", height=150,
+            df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}_Ativo", height=150,
             column_config={
                 "item": st.column_config.TextColumn("Descrição do Gasto Fixo"),
                 "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"fix_{p_code}_{mes_atual}"] = df_fixos_edit
+        st.session_state[f"fix_{p_code}_Ativo"] = df_fixos_edit
 
         st.divider()
 
@@ -934,14 +937,14 @@ else:
         mes_b_atual = mes_tela_para_banco(mes_atual)
         df_comuns_mes = get_comuns_mes(mes_b_atual)
         df_comuns_edit = st.data_editor(
-            df_comuns_mes, num_rows="dynamic", use_container_width=True, key=f"comuns_editor_{mes_atual}", height=220,
+            df_comuns_mes, num_rows="dynamic", use_container_width=True, key="comuns_Ativo", height=220,
             column_config={
                 "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
                 "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0),
                 "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
             }
         )
-        st.session_state[f"comuns_editor_{mes_atual}"] = df_comuns_edit
+        st.session_state["comuns_Ativo"] = df_comuns_edit
 
     with tab_consolidado:
         st.header("🏠 Visão Consolidada, Caixinha & Totais")
