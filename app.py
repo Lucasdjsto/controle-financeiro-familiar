@@ -560,20 +560,20 @@ with st.sidebar:
         mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
         if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"], mes_foco_atual)
         if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"], mes_foco_atual)
-        if f"fix_p1_{mes_foco_atual}" in st.session_state or "fix_p1_df" in st.session_state: 
-            salvar_fixos("Pessoa 1", st.session_state.get(f"fix_p1_{mes_foco_atual}", st.session_state.get("fix_p1_df")), mes_foco_atual)
-        if f"prog_p1_{mes_foco_atual}" in st.session_state or "prog_p1_df" in st.session_state: 
-            salvar_programado_cartao("Pessoa 1", st.session_state.get(f"prog_p1_{mes_foco_atual}", st.session_state.get("prog_p1_df")), mes_foco_atual)
+        if f"fix_p1_{mes_foco_atual}" in st.session_state: 
+            salvar_fixos("Pessoa 1", st.session_state[f"fix_p1_{mes_foco_atual}"], mes_foco_atual)
+        if f"prog_p1_{mes_foco_atual}" in st.session_state: 
+            salvar_programado_cartao("Pessoa 1", st.session_state[f"prog_p1_{mes_foco_atual}"], mes_foco_atual)
 
         if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"], mes_foco_atual)
         if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"], mes_foco_atual)
-        if f"fix_p2_{mes_foco_atual}" in st.session_state or "fix_p2_df" in st.session_state: 
-            salvar_fixos("Pessoa 2", st.session_state.get(f"fix_p2_{mes_foco_atual}", st.session_state.get("fix_p2_df")), mes_foco_atual)
-        if f"prog_p2_{mes_foco_atual}" in st.session_state or "prog_p2_df" in st.session_state: 
-            salvar_programado_cartao("Pessoa 2", st.session_state.get(f"prog_p2_{mes_foco_atual}", st.session_state.get("prog_p2_df")), mes_foco_atual)
+        if f"fix_p2_{mes_foco_atual}" in st.session_state: 
+            salvar_fixos("Pessoa 2", st.session_state[f"fix_p2_{mes_foco_atual}"], mes_foco_atual)
+        if f"prog_p2_{mes_foco_atual}" in st.session_state: 
+            salvar_programado_cartao("Pessoa 2", st.session_state[f"prog_p2_{mes_foco_atual}"], mes_foco_atual)
 
-        if f"comuns_editor_{mes_foco_atual}" in st.session_state or "comuns_df" in st.session_state: 
-            salvar_comuns(st.session_state.get(f"comuns_editor_{mes_foco_atual}", st.session_state.get("comuns_df")), mes_foco_atual)
+        if f"comuns_editor_{mes_foco_atual}" in st.session_state: 
+            salvar_comuns(st.session_state[f"comuns_editor_{mes_foco_atual}"], mes_foco_atual)
             
         if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"], mes_foco_atual)
         
