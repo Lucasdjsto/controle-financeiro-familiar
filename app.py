@@ -560,12 +560,12 @@ with st.sidebar:
         mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
         
         for p_code in ["p1", "p2"]:
-            if f"rec_{p_code}_df" in st.session_state:
+            if f"rec_{p_code}" in st.session_state:
                 p_nome = "Pessoa 1" if p_code == "p1" else "Pessoa 2"
-                salvar_projecao(p_nome, "RECEITA", st.session_state[f"rec_{p_code}_df"], st.session_state["meses_v"], mes_foco_atual)
-            if f"cart_{p_code}_df" in st.session_state:
+                salvar_projecao(p_nome, "RECEITA", st.session_state[f"rec_{p_code}"], st.session_state["meses_v"], mes_foco_atual)
+            if f"cart_{p_code}" in st.session_state:
                 p_nome = "Pessoa 1" if p_code == "p1" else "Pessoa 2"
-                salvar_projecao(p_nome, "CARTAO", st.session_state[f"cart_{p_code}_df"], st.session_state["meses_v"], mes_foco_atual)
+                salvar_projecao(p_nome, "CARTAO", st.session_state[f"cart_{p_code}"], st.session_state["meses_v"], mes_foco_atual)
             if f"fix_{p_code}" in st.session_state:
                 p_nome = "Pessoa 1" if p_code == "p1" else "Pessoa 2"
                 salvar_fixos(p_nome, st.session_state[f"fix_{p_code}"], mes_foco_atual)
@@ -823,11 +823,10 @@ else:
         conf_rec = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
         conf_rec["Item"] = st.column_config.TextColumn("Item / Descrição", disabled=True)
 
-        df_rec_edit = st.data_editor(
+        st.data_editor(
             df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=190,
             column_config=conf_rec
         )
-        st.session_state[f"rec_{p_code}_df"] = df_rec_edit
 
         st.divider()
 
@@ -872,18 +871,17 @@ else:
         conf_cart = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
         conf_cart["Item"] = st.column_config.TextColumn("Cartão", disabled=True)
 
-        df_cart_edit = st.data_editor(
+        st.data_editor(
             df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=220,
             column_config=conf_cart
         )
-        st.session_state[f"cart_{p_code}_df"] = df_cart_edit
 
         st.divider()
 
         st.subheader(f"🔮 3. Lançamentos Programados no Cartão ({mes_atual})")
         st.caption("ℹ️ Editando os lançamentos específicos para o mês selecionado.")
         df_prog_cart = get_programado_cartao_mes(pessoa, mes_b_atual)
-        df_prog_edit = st.data_editor(
+        st.data_editor(
             df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}", height=150,
             column_config={
                 "cartao": st.column_config.SelectboxColumn("Cartão", options=lista_cartoes_final),
@@ -891,21 +889,19 @@ else:
                 "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"prog_{p_code}"] = df_prog_edit
 
         st.divider()
 
         st.subheader(f"📌 4. Gastos Fixos Individuais Recorrentes ({mes_atual})")
         st.caption("ℹ️ Editando os gastos fixos específicos para o mês selecionado.")
         df_fixos_db = get_fixos_mes(pessoa, mes_b_atual)
-        df_fixos_edit = st.data_editor(
+        st.data_editor(
             df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}", height=150,
             column_config={
                 "item": st.column_config.TextColumn("Descrição do Gasto Fixo"),
                 "valor": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"fix_{p_code}"] = df_fixos_edit
 
         st.divider()
 
@@ -935,7 +931,7 @@ else:
         st.caption("ℹ️ Editando as despesas comuns específicas para o mês selecionado.")
         mes_b_atual = mes_tela_para_banco(mes_atual)
         df_comuns_mes = get_comuns_mes(mes_b_atual)
-        df_comuns_edit = st.data_editor(
+        st.data_editor(
             df_comuns_mes, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
             column_config={
                 "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
@@ -943,7 +939,6 @@ else:
                 "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
             }
         )
-        st.session_state["comuns_editor"] = df_comuns_edit
 
     with tab_consolidado:
         st.header("🏠 Visão Consolidada, Caixinha & Totais")
@@ -972,7 +967,7 @@ else:
             })
             
         df_caixinha_grid = pd.DataFrame(rows_caixinha)
-        df_caixinha_edit = st.data_editor(
+        st.data_editor(
             df_caixinha_grid, num_rows="fixed", use_container_width=True, key="caixinha_editor", height=200,
             column_config={
                 "Mês": st.column_config.TextColumn("Mês", disabled=True),
@@ -980,7 +975,6 @@ else:
                 "Total Acumulado na Caixinha (R$)": st.column_config.NumberColumn("Total Acumulado na Caixinha (R$)", format="R$ %.2f", disabled=True)
             }
         )
-        st.session_state["caixinha_editor"] = df_caixinha_edit
 
         st.divider()
 
