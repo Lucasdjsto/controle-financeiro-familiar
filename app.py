@@ -186,6 +186,11 @@ def init_db():
                     chave TEXT PRIMARY KEY, valor TEXT
                 );
             '''))
+            
+            # Garante que bases antigas recebam a coluna mes_ano sem apagar dados
+            conn.execute(text('ALTER TABLE gastos_fixos ADD COLUMN IF NOT EXISTS mes_ano TEXT;'))
+            conn.execute(text('ALTER TABLE gastos_comuns ADD COLUMN IF NOT EXISTS mes_ano TEXT;'))
+            conn.execute(text('ALTER TABLE programado_cartao ADD COLUMN IF NOT EXISTS mes_ano TEXT;'))
     except Exception as e:
         st.error(f"Erro de Conexão com o Banco de Dados: {e}")
 
@@ -262,17 +267,14 @@ def get_projecao(pessoa, tipo, mes_tela):
         return pd.DataFrame(columns=['pessoa', 'tipo', 'item', 'mes_ano', 'valor'])
     return df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == tipo) & (df_proj_all['mes_ano'] == mes_banco)]
 
-# Função de Herança para Gastos Fixos por Mês
 def get_fixos_mes(pessoa, mes_banco):
     if df_fixos_all.empty:
         return pd.DataFrame(columns=['id', 'item', 'valor'])
     
-    # 1. Tenta buscar registros exatos do mês
     df_mes = df_fixos_all[(df_fixos_all['pessoa'] == pessoa) & (df_fixos_all['mes_ano'] == mes_banco)]
     if not df_mes.empty:
         return df_mes[['id', 'item', 'valor']]
     
-    # 2. Se não houver, busca o mês mais recente anterior com registros (Herança)
     meses_disponiveis = sorted(df_fixos_all[df_fixos_all['pessoa'] == pessoa]['mes_ano'].unique())
     meses_anteriores = [m for m in meses_disponiveis if m < mes_banco]
     
@@ -286,7 +288,6 @@ def get_fixos_mes(pessoa, mes_banco):
             
     return pd.DataFrame(columns=['id', 'item', 'valor'])
 
-# Função de Herança para Despesas Comuns por Mês
 def get_comuns_mes(mes_banco):
     if df_comuns_all.empty:
         return pd.DataFrame(columns=['id', 'item', 'valor', 'pagador'])
@@ -308,7 +309,6 @@ def get_comuns_mes(mes_banco):
             
     return pd.DataFrame(columns=['id', 'item', 'valor', 'pagador'])
 
-# Função de Herança para Programados no Cartão por Mês
 def get_programado_cartao_mes(pessoa, mes_banco):
     if df_prog_all.empty:
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
@@ -330,7 +330,6 @@ def get_programado_cartao_mes(pessoa, mes_banco):
             
     return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
 
-# Funções de Escrita Específicas por Mês
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -453,7 +452,6 @@ def salvar_programado_cartao(pessoa, df_editado, mes_tela):
     salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
 
-# Lógica de Cálculo Financeiro Mensal com Herança
 def calcular_sequencia_financeira():
     dados_meses = {}
     saldo_acumulado_anterior = 0.0
@@ -464,7 +462,6 @@ def calcular_sequencia_financeira():
     for m_b in meses_banco_seq:
         m_t = mes_banco_para_tela(m_b)
 
-        # Gastos do mês considerando herança caso não haja override no mês
         df_fix_p1_mes = get_fixos_mes("Pessoa 1", m_b)
         df_fix_p2_mes = get_fixos_mes("Pessoa 2", m_b)
         df_prog_p1_mes = get_programado_cartao_mes("Pessoa 1", m_b)
