@@ -496,18 +496,18 @@ with st.sidebar:
         mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
         meses_v = st.session_state.get("meses_v", [mes_foco_atual])
         
-        if "rec_p1" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1"], meses_v, mes_foco_atual)
-        if "cart_p1" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1"], meses_v, mes_foco_atual)
-        if "fix_p1" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1"], mes_foco_atual)
-        if "prog_p1" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1"], mes_foco_atual)
+        if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], meses_v, mes_foco_atual)
+        if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], meses_v, mes_foco_atual)
+        if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"], mes_foco_atual)
+        if "prog_p1_df" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1_df"], mes_foco_atual)
 
-        if "rec_p2" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2"], meses_v, mes_foco_atual)
-        if "cart_p2" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2"], meses_v, mes_foco_atual)
-        if "fix_p2" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2"], mes_foco_atual)
-        if "prog_p2" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2"], mes_foco_atual)
+        if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], meses_v, mes_foco_atual)
+        if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], meses_v, mes_foco_atual)
+        if "fix_p2_df" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2_df"], mes_foco_atual)
+        if "prog_p2_df" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2_df"], mes_foco_atual)
 
-        if "comuns_editor" in st.session_state: salvar_comuns(st.session_state["comuns_editor"], mes_foco_atual)
-        if "caixinha_editor" in st.session_state: salvar_caixinha(st.session_state["caixinha_editor"], mes_foco_atual)
+        if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"], mes_foco_atual)
+        if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"], mes_foco_atual)
         
         salvar_ultimo_mes_banco(mes_foco_atual)
         st.success("Salvo com sucesso!")
@@ -724,7 +724,7 @@ else:
 
     st.divider()
 
-    # Reordenado: Aba Consolidada agora é a primeira
+    # Reordenado: Aba Consolidada agora é a primeira à esquerda
     tab_consolidado, tab_p1, tab_p2, tab_comuns = st.tabs([
         "🏠 Visão Consolidada & Caixinha",
         "👤 Pessoa 1 (Lucas)", 
@@ -755,10 +755,10 @@ else:
         conf_rec["Item"] = st.column_config.TextColumn("Item / Descrição", disabled=True)
 
         df_rec_edit = st.data_editor(
-            df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=190,
+            df_rec_grid, num_rows="fixed", use_container_width=True, key=f"editor_rec_{p_code}", height=190,
             column_config=conf_rec
         )
-        st.session_state[f"rec_{p_code}"] = df_rec_edit
+        st.session_state[f"rec_{p_code}_df"] = df_rec_edit
 
         st.divider()
 
@@ -804,37 +804,37 @@ else:
         conf_cart["Item"] = st.column_config.TextColumn("Cartão", disabled=True)
 
         df_cart_edit = st.data_editor(
-            df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=220,
+            df_cart_grid, num_rows="fixed", use_container_width=True, key=f"editor_cart_{p_code}", height=220,
             column_config=conf_cart
         )
-        st.session_state[f"cart_{p_code}"] = df_cart_edit
+        st.session_state[f"cart_{p_code}_df"] = df_cart_edit
 
         st.divider()
 
         st.subheader("🔮 3. Lançamentos Programados no Cartão")
         df_prog_cart = get_programado_cartao(pessoa)
         df_prog_edit = st.data_editor(
-            df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"prog_{p_code}", height=150,
+            df_prog_cart, num_rows="dynamic", use_container_width=True, key=f"editor_prog_{p_code}", height=150,
             column_config={
                 "cartao": st.column_config.SelectboxColumn("Cartão", options=lista_cartoes_final),
                 "descricao": st.column_config.TextColumn("Descrição (ex: Seguro, Netflix)"),
                 "valor": st.column_config.NumberColumn("Valor Previsto (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"prog_{p_code}"] = df_prog_edit
+        st.session_state[f"prog_{p_code}_df"] = df_prog_edit
 
         st.divider()
 
         st.subheader("📌 4. Gastos Fixos Individuais Recorrentes")
         df_fixos_db = get_fixos(pessoa)
         df_fixos_edit = st.data_editor(
-            df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"fix_{p_code}", height=150,
+            df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"editor_fix_{p_code}", height=150,
             column_config={
                 "item": st.column_config.TextColumn("Descrição do Gasto Fixo Individual"),
                 "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"fix_{p_code}"] = df_fixos_edit
+        st.session_state[f"fix_{p_code}_df"] = df_fixos_edit
 
         st.divider()
 
@@ -881,14 +881,14 @@ else:
             
         df_caixinha_grid = pd.DataFrame(rows_caixinha)
         df_caixinha_edit = st.data_editor(
-            df_caixinha_grid, num_rows="fixed", use_container_width=True, key="caixinha_editor", height=200,
+            df_caixinha_grid, num_rows="fixed", use_container_width=True, key="editor_caixinha", height=200,
             column_config={
                 "Mês": st.column_config.TextColumn("Mês", disabled=True),
                 "Aporte do Mês (R$)": st.column_config.NumberColumn("Aporte do Mês (R$)", format="R$ %.2f", min_value=0.0),
                 "Total Acumulado na Caixinha (R$)": st.column_config.NumberColumn("Total Acumulado na Caixinha (R$)", format="R$ %.2f", disabled=True)
             }
         )
-        st.session_state["caixinha_editor"] = df_caixinha_edit
+        st.session_state["caixinha_df"] = df_caixinha_edit
 
         st.divider()
 
@@ -934,11 +934,11 @@ else:
     with tab_comuns:
         st.header("🏡 Despesas Comuns do Casal / Casa")
         df_comuns_edit = st.data_editor(
-            df_comuns_all, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
+            df_comuns_all, num_rows="dynamic", use_container_width=True, key="editor_comuns", height=220,
             column_config={
                 "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
                 "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0),
                 "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
             }
         )
-        st.session_state["comuns_editor"] = df_comuns_edit
+        st.session_state["comuns_df"] = df_comuns_edit
