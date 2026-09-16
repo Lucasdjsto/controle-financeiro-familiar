@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado
+# 2. CSS Otimizado para Mobile e Desktop
 st.markdown("""
     <style>
         .block-container {
@@ -178,12 +178,17 @@ def init_db():
             '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS gastos_fixos (
-                    id SERIAL PRIMARY KEY, pessoa TEXT, item TEXT, valor DOUBLE PRECISION DEFAULT 0
+                    pessoa TEXT, item TEXT, mes_ano TEXT,
+                    valor DOUBLE PRECISION DEFAULT 0,
+                    PRIMARY KEY (pessoa, item, mes_ano)
                 );
             '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS gastos_comuns (
-                    id SERIAL PRIMARY KEY, item TEXT, valor DOUBLE PRECISION DEFAULT 0, pagador TEXT DEFAULT 'Dividido (50/50)'
+                    item TEXT, mes_ano TEXT,
+                    valor DOUBLE PRECISION DEFAULT 0,
+                    pagador TEXT DEFAULT 'Dividido (50/50)',
+                    PRIMARY KEY (item, mes_ano)
                 );
             '''))
             conn.execute(text('''
@@ -282,17 +287,46 @@ def get_projecao(pessoa, tipo, mes_tela):
         return pd.DataFrame(columns=['pessoa', 'tipo', 'item', 'mes_ano', 'valor'])
     return df_proj_all[(df_proj_all['pessoa'] == pessoa) & (df_proj_all['tipo'] == tipo) & (df_proj_all['mes_ano'] == mes_banco)]
 
-def get_fixos(pessoa):
+def get_fixos_no_mes(pessoa, mes_tela):
+    mes_b = mes_tela_para_banco(mes_tela)
     if df_fixos_all.empty:
-        return pd.DataFrame(columns=['id', 'item', 'valor'])
-    return df_fixos_all[df_fixos_all['pessoa'] == pessoa][['id', 'item', 'valor']]
+        return pd.DataFrame(columns=['item', 'valor'])
+    
+    df_p = df_fixos_all[df_fixos_all['pessoa'] == pessoa]
+    df_mes = df_p[df_p['mes_ano'] == mes_b]
+    
+    if not df_mes.empty:
+        return df_mes[['item', 'valor']]
+    
+    meses_anteriores = [m for m in df_p['mes_ano'].unique() if m <= mes_b]
+    if meses_anteriores:
+        ultimo_m = max(meses_anteriores)
+        return df_p[df_p['mes_ano'] == ultimo_m][['item', 'valor']]
+    
+    return pd.DataFrame(columns=['item', 'valor'])
+
+def get_comuns_no_mes(mes_tela):
+    mes_b = mes_tela_para_banco(mes_tela)
+    if df_comuns_all.empty:
+        return pd.DataFrame(columns=['item', 'valor', 'pagador'])
+    
+    df_mes = df_comuns_all[df_comuns_all['mes_ano'] == mes_b]
+    if not df_mes.empty:
+        return df_mes[['item', 'valor', 'pagador']]
+    
+    meses_anteriores = [m for m in df_comuns_all['mes_ano'].unique() if m <= mes_b]
+    if meses_anteriores:
+        ultimo_m = max(meses_anteriores)
+        return df_comuns_all[df_comuns_all['mes_ano'] == ultimo_m][['item', 'valor', 'pagador']]
+        
+    return pd.DataFrame(columns=['item', 'valor', 'pagador'])
 
 def get_programado_cartao(pessoa):
     if df_prog_all.empty:
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# Funções de Escrita com Tratamento de Erro Robusto
+# Funções de Escrita em Banco
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -325,37 +359,69 @@ def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
-def salvar_fixos(pessoa, df_editado, mes_atual_foco):
+def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
+    idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
+    meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
+    
     with engine.begin() as conn:
-        conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa"), {"pessoa": pessoa})
-        for _, row in df_editado.iterrows():
-            if str(row['item']).strip():
-                query = "INSERT INTO gastos_fixos (pessoa, item, valor) VALUES (:pessoa, :item, :val)"
-                conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "val": safe_float(row['valor'])})
-    salvar_ultimo_mes_banco(mes_atual_foco)
+        for m_t in meses_afetados_tela:
+            m_b = mes_tela_para_banco(m_t)
+            conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"), {"pessoa": pessoa, "mes": m_b})
+            for _, row in df_editado.iterrows():
+                if str(row['item']).strip():
+                    query = '''
+                        INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor)
+                        VALUES (:pessoa, :item, :mes, :val)
+                        ON CONFLICT (pessoa, item, mes_ano)
+                        DO UPDATE SET valor = EXCLUDED.valor;
+                    '''
+                    conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "mes": m_b, "val": safe_float(row['valor'])})
+                    
+    salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
 
-def salvar_comuns(df_editado, mes_atual_foco):
+def salvar_comuns_futuro(df_editado, mes_inicio_tela):
+    idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
+    meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
+    
     with engine.begin() as conn:
-        conn.execute(text("DELETE FROM gastos_comuns"))
-        for _, row in df_editado.iterrows():
-            if str(row['item']).strip():
-                pag = str(row.get('pagador', 'Dividido (50/50)'))
-                query = "INSERT INTO gastos_comuns (item, valor, pagador) VALUES (:item, :val, :pag)"
-                conn.execute(text(query), {"item": str(row['item']), "val": safe_float(row['valor']), "pag": pag})
-    salvar_ultimo_mes_banco(mes_atual_foco)
+        for m_t in meses_afetados_tela:
+            m_b = mes_tela_para_banco(m_t)
+            conn.execute(text("DELETE FROM gastos_comuns WHERE mes_ano = :mes"), {"mes": m_b})
+            for _, row in df_editado.iterrows():
+                if str(row['item']).strip():
+                    pag = str(row.get('pagador', 'Dividido (50/50)'))
+                    query = '''
+                        INSERT INTO gastos_comuns (item, mes_ano, valor, pagador)
+                        VALUES (:item, :mes, :val, :pag)
+                        ON CONFLICT (item, mes_ano)
+                        DO UPDATE SET valor = EXCLUDED.valor, pagador = EXCLUDED.pagador;
+                    '''
+                    conn.execute(text(query), {"item": str(row['item']), "mes": m_b, "val": safe_float(row['valor']), "pag": pag})
+                    
+    salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
 
-def salvar_status_fatura(pessoa, mes_tela, fechada):
+# Ação Direta Manual: Fechar e Arquivar o Mês
+def arquivar_mes_manual(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
-        query = '''
-            INSERT INTO status_faturas (pessoa, mes_ano, fechada)
-            VALUES (:pessoa, :mes_ano, :fechada)
-            ON CONFLICT (pessoa, mes_ano)
-            DO UPDATE SET fechada = EXCLUDED.fechada;
-        '''
-        conn.execute(text(query), {"pessoa": pessoa, "mes_ano": mes_b, "fechada": fechada})
+        conn.execute(text('''
+            INSERT INTO status_faturas (pessoa, mes_ano, fechada) VALUES ('Pessoa 1', :mes, TRUE)
+            ON CONFLICT (pessoa, mes_ano) DO UPDATE SET fechada = TRUE;
+        '''), {"mes": mes_b})
+        conn.execute(text('''
+            INSERT INTO status_faturas (pessoa, mes_ano, fechada) VALUES ('Pessoa 2', :mes, TRUE)
+            ON CONFLICT (pessoa, mes_ano) DO UPDATE SET fechada = TRUE;
+        '''), {"mes": mes_b})
+    salvar_ultimo_mes_banco(mes_tela)
+    st.cache_data.clear()
+
+# Ação Direta Manual: Reabrir Mês
+def reabrir_mes_manual(mes_tela):
+    mes_b = mes_tela_para_banco(mes_tela)
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM status_faturas WHERE mes_ano = :mes;"), {"mes": mes_b})
     salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
 
@@ -416,16 +482,6 @@ def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
-    
-    fix_p1 = get_fixos("Pessoa 1")['valor'].apply(safe_float).sum() if not df_fixos_all.empty else 0.0
-    fix_p2 = get_fixos("Pessoa 2")['valor'].apply(safe_float).sum() if not df_fixos_all.empty else 0.0
-    
-    comuns_val_total = df_comuns_all['valor'].apply(safe_float).sum() if not df_comuns_all.empty else 0.0
-    comuns_p1 = df_comuns_all[df_comuns_all['pagador'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not df_comuns_all.empty else 0.0
-    comuns_p2 = df_comuns_all[df_comuns_all['pagador'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not df_comuns_all.empty else 0.0
-    comuns_div = df_comuns_all[df_comuns_all['pagador'] == 'Dividido (50/50)']['valor'].apply(safe_float).sum() if not df_comuns_all.empty else 0.0
-    
-    tot_fixos = fix_p1 + fix_p2 + comuns_val_total
 
     dados_meses = {}
     saldo_acumulado_anterior = 0.0
@@ -435,6 +491,20 @@ def calcular_sequencia_financeira():
 
     for m_b in meses_banco_seq:
         m_t = mes_banco_para_tela(m_b)
+
+        df_fix_p1 = get_fixos_no_mes("Pessoa 1", m_t)
+        df_fix_p2 = get_fixos_no_mes("Pessoa 2", m_t)
+        df_comuns_m = get_comuns_no_mes(m_t)
+
+        fix_p1 = df_fix_p1['valor'].apply(safe_float).sum() if not df_fix_p1.empty else 0.0
+        fix_p2 = df_fix_p2['valor'].apply(safe_float).sum() if not df_fix_p2.empty else 0.0
+
+        comuns_val_total = df_comuns_m['valor'].apply(safe_float).sum() if not df_comuns_m.empty else 0.0
+        comuns_p1 = df_comuns_m[df_comuns_m['pagador'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not df_comuns_m.empty else 0.0
+        comuns_p2 = df_comuns_m[df_comuns_m['pagador'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not df_comuns_m.empty else 0.0
+        comuns_div = df_comuns_m[df_comuns_m['pagador'] == 'Dividido (50/50)']['valor'].apply(safe_float).sum() if not df_comuns_m.empty else 0.0
+
+        tot_fixos = fix_p1 + fix_p2 + comuns_val_total
 
         r_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
@@ -709,7 +779,6 @@ else:
     ])
 
     def renderizar_pessoa(pessoa, p_code):
-        # Formulário para salvar todas as alterações da pessoa sem recarregar a cada digitação
         with st.form(f"form_pessoa_{p_code}"):
             st.subheader("💵 1. Receitas (Salário e Rendimentos)")
             rows_rec = []
@@ -780,8 +849,8 @@ else:
 
             st.divider()
 
-            st.subheader("📌 4. Gastos Fixos Individuais Recorrentes")
-            df_fixos_db = get_fixos(pessoa)
+            st.subheader(f"📌 4. Gastos Fixos Individuais Recorrentes ({mes_atual} em diante)")
+            df_fixos_db = get_fixos_no_mes(pessoa, mes_atual)
             df_fixos_edit = st.data_editor(
                 df_fixos_db, num_rows="dynamic", use_container_width=True, key=f"editor_fix_{p_code}", height=150,
                 column_config={
@@ -797,33 +866,14 @@ else:
                 salvar_projecao(pessoa, "RECEITA", df_rec_edit, meses_visiveis, mes_atual)
                 salvar_projecao(pessoa, "CARTAO", df_cart_edit, meses_visiveis, mes_atual)
                 salvar_programado_cartao(pessoa, df_prog_edit, mes_atual)
-                salvar_fixos(pessoa, df_fixos_edit, mes_atual)
+                salvar_fixos_futuro(pessoa, df_fixos_edit, mes_atual)
                 st.success(f"Dados de {pessoa} salvos com sucesso!")
                 st.rerun()
 
         st.divider()
 
-        st.subheader("⚙️ Status da Fatura do Mês de Referência")
-        mes_b_atual = mes_tela_para_banco(mes_atual)
-        st_match = df_status_all[(df_status_all['pessoa'] == pessoa) & (df_status_all['mes_ano'] == mes_b_atual)] if not df_status_all.empty else pd.DataFrame()
-        is_closed_db = bool(st_match['fechada'].iloc[0]) if not st_match.empty else False
-        
-        key_chk = f"chk_fat_{p_code}_{mes_atual}"
-        if key_chk not in st.session_state:
-            st.session_state[key_chk] = is_closed_db
-
-        chk_fechada = st.checkbox(
-            f"✅ Fatura de {mes_atual} Fechada / Processada", 
-            key=key_chk
-        )
-        
-        if chk_fechada != is_closed_db:
-            salvar_status_fatura(pessoa, mes_atual, chk_fechada)
-            st.rerun()
-
-        st.divider()
-
         st.subheader("💸 Extrato de Gastos Esporádicos (PIX / Dinheiro)")
+        mes_b_atual = mes_tela_para_banco(mes_atual)
         pontuais_p = df_pontuais_all[(df_pontuais_all['pessoa'] == pessoa) & (df_pontuais_all['mes_ano'] == mes_b_atual)] if not df_pontuais_all.empty else pd.DataFrame()
         
         if not pontuais_p.empty:
@@ -841,6 +891,33 @@ else:
     with tab_consolidado:
         st.header("🏠 Visão Consolidada, Caixinha & Totais")
         
+        # Painel de Controle de Encerramento e Congelamento do Mês
+        st.subheader(f"🔒 Encerramento e Congelamento do Mês — **{mes_atual}**")
+        mes_b_atual = mes_tela_para_banco(mes_atual)
+        st_match = df_status_all[df_status_all['mes_ano'] == mes_b_atual] if not df_status_all.empty else pd.DataFrame()
+        is_mes_fechado = bool(st_match['fechada'].iloc[0]) if (not st_match.empty and 'fechada' in st_match.columns) else False
+
+        col_st1, col_st2 = st.columns([3, 1])
+        with col_st1:
+            if is_mes_fechado:
+                st.warning("⚠️ **Mês Fechado e Arquivado:** Os dados deste mês estão congelados no histórico.")
+            else:
+                st.info("ℹ️ **Mês Aberto:** Você pode editar, simular e navegar livremente sem alterar o passado.")
+
+        with col_st2:
+            if not is_mes_fechado:
+                if st.button(f"🔒 Fechar Mês {mes_atual}", type="primary", use_container_width=True):
+                    arquivar_mes_manual(mes_atual)
+                    st.success(f"Mês {mes_atual} arquivado e congelado com sucesso!")
+                    st.rerun()
+            else:
+                if st.button(f"🔓 Reabrir Mês {mes_atual}", use_container_width=True):
+                    reabrir_mes_manual(mes_atual)
+                    st.success(f"Mês {mes_atual} reaberto para edição!")
+                    st.rerun()
+
+        st.divider()
+
         st.subheader("📦 Caixinha de Reserva da Família (Acumulativa)")
         
         rows_caixinha = []
@@ -926,15 +1003,15 @@ else:
         st.header("🏡 Despesas Comuns do Casal / Casa")
         with st.form("form_comuns"):
             df_comuns_edit = st.data_editor(
-                df_comuns_all, num_rows="dynamic", use_container_width=True, key="editor_comuns", height=220,
+                get_comuns_no_mes(mes_atual), num_rows="dynamic", use_container_width=True, key="editor_comuns", height=220,
                 column_config={
                     "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
                     "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0),
                     "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
                 }
             )
-            btn_salvar_comuns = st.form_submit_button("💾 Salvar Despesas Comuns", type="primary", use_container_width=True)
+            btn_salvar_comuns = st.form_submit_button("💾 Salvar Despesas Comuns (Mês e Futuro)", type="primary", use_container_width=True)
             if btn_salvar_comuns:
-                salvar_comuns(df_comuns_edit, mes_atual)
-                st.success("Despesas comuns salvas com sucesso!")
+                salvar_comuns_futuro(df_comuns_edit, mes_atual)
+                st.success("Despesas comuns atualizadas para o futuro com sucesso!")
                 st.rerun()
