@@ -294,12 +294,10 @@ def get_fixos_no_mes(pessoa, mes_tela):
     
     df_p = df_fixos_all[df_fixos_all['pessoa'] == pessoa].copy()
     
-    # Tratamento contra valores Nulos no mes_ano
-    df_p = df_p[df_p['mes_ano'].notnull()]
-    df_p['mes_ano'] = df_p['mes_ano'].astype(str)
+    # Migração transparente: se o registro legado não tinha mes_ano (NULL), atribui uma data base inicial
+    df_p['mes_ano'] = df_p['mes_ano'].fillna("08.2026").astype(str)
     
     df_mes = df_p[df_p['mes_ano'] == mes_b]
-    
     if not df_mes.empty:
         return df_mes[['item', 'valor']]
     
@@ -308,7 +306,8 @@ def get_fixos_no_mes(pessoa, mes_tela):
         ultimo_m = max(meses_anteriores)
         return df_p[df_p['mes_ano'] == ultimo_m][['item', 'valor']]
     
-    return pd.DataFrame(columns=['item', 'valor'])
+    # Se não achar nenhuma data anterior, pega os dados legados como padrão
+    return df_p[['item', 'valor']]
 
 def get_comuns_no_mes(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
@@ -317,9 +316,8 @@ def get_comuns_no_mes(mes_tela):
     
     df_c = df_comuns_all.copy()
     
-    # Tratamento contra valores Nulos no mes_ano
-    df_c = df_c[df_c['mes_ano'].notnull()]
-    df_c['mes_ano'] = df_c['mes_ano'].astype(str)
+    # Migração transparente: se o registro legado não tinha mes_ano (NULL), atribui uma data base inicial
+    df_c['mes_ano'] = df_c['mes_ano'].fillna("08.2026").astype(str)
     
     df_mes = df_c[df_c['mes_ano'] == mes_b]
     if not df_mes.empty:
@@ -330,7 +328,8 @@ def get_comuns_no_mes(mes_tela):
         ultimo_m = max(meses_anteriores)
         return df_c[df_c['mes_ano'] == ultimo_m][['item', 'valor', 'pagador']]
         
-    return pd.DataFrame(columns=['item', 'valor', 'pagador'])
+    # Se não achar nenhuma data anterior, recupera o cadastro legado
+    return df_c[['item', 'valor', 'pagador']]
 
 def get_programado_cartao(pessoa):
     if df_prog_all.empty:
