@@ -5,16 +5,20 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 # 1. Configuração da Página
-st.set_page_config(page_title="Sistema Integrado de Gestão Financeira", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="Sistema Integrado de Gestão Financeira",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 # 2. Injeção de CSS otimizado para alta performance e fluidez no celular
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 0.2rem !important;
+            padding-top: 0.5rem !important;
             padding-bottom: 0.8rem !important;
-            padding-left: 0.3rem !important;
-            padding-right: 0.3rem !important;
+            padding-left: 0.4rem !important;
+            padding-right: 0.4rem !important;
         }
         
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
@@ -25,29 +29,51 @@ st.markdown("""
             padding: 2px 4px !important;
         }
         
-        .metrics-grid {
+        .exec-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 5px;
+            gap: 6px;
             width: 100%;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.6rem;
         }
         
-        .metric-box, .metric-box-reserva, .metric-box-final, .metric-box-patrimonio {
-            border-radius: 6px;
-            padding: 6px 8px;
+        .exec-box {
+            background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 8px 10px;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
-
-        .metric-box { background-color: #111827; border: 1px solid #1f2937; }
-        .metric-box-reserva { background-color: #0c2340; border: 1px solid #0284c7; }
-        .metric-box-final { background-color: #1e1b4b; border: 1px solid #6366f1; }
-        .metric-box-patrimonio { background-color: #422006; border: 1px solid #d97706; grid-column: span 2; }
         
-        .metric-title { font-size: 0.62rem; color: #9ca3af; font-weight: 500; margin-bottom: 2px; }
-        .metric-val { font-size: 0.82rem; font-weight: 700; color: #f3f4f6; }
+        .exec-box-reserva { background: #0c2340; border: 1px solid #0284c7; }
+        .exec-box-final { background: #1e1b4b; border: 1px solid #6366f1; }
+        .exec-box-patrimonio { background: #422006; border: 1px solid #d97706; grid-column: span 2; }
+        
+        .exec-title { font-size: 0.65rem; color: #9ca3af; font-weight: 500; margin-bottom: 2px; }
+        .exec-val { font-size: 0.88rem; font-weight: 700; color: #f3f4f6; }
+
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 4px;
+            background-color: #111827;
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid #374151;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            height: 36px;
+            border-radius: 6px;
+            color: #9ca3af;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+        
+        .stTabs [aria-selected="true"] {
+            background-color: #2563eb !important;
+            color: white !important;
+        }
 
         .stButton > button {
             border-radius: 5px;
@@ -57,8 +83,8 @@ st.markdown("""
         }
 
         @media (min-width: 768px) {
-            .metrics-grid { grid-template-columns: repeat(3, 1fr); }
-            .metric-box-patrimonio { grid-column: span 3; }
+            .exec-grid { grid-template-columns: repeat(3, 1fr); }
+            .exec-box-patrimonio { grid-column: span 3; }
         }
     </style>
 """, unsafe_allow_html=True)
@@ -133,8 +159,8 @@ def get_db_engine():
         db_url,
         pool_size=2,
         max_overflow=3,
-        pool_recycle=60,         # Recicla conexões ociosas a cada 60s para evitar timeout do Supabase
-        pool_pre_ping=True,      # Testa a conexão antes de executar comandos (evita crash no meio da escrita)
+        pool_recycle=60,
+        pool_pre_ping=True,
         connect_args={"connect_timeout": 5}
     )
 
@@ -232,7 +258,6 @@ ESTRUTURA_CARTÕES_BASE = {
 
 ESTRUTURA_RECEITAS = ["Salário Base", "Receita Extra", "Receita Extra 1", "Receita Extra 2"]
 
-# Leitura Otimizada com cache leve para evitar lentidão ao mudar de tela
 @st.cache_data(ttl=60, show_spinner=False)
 def carregar_dados_globais():
     with engine.connect() as conn:
@@ -469,18 +494,20 @@ with st.sidebar:
     
     if st.button("💾 SALVAR DADOS", type="primary", use_container_width=True):
         mes_foco_atual = st.session_state.get("mes_atual_sel", "09.2026")
-        if "rec_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1_df"], st.session_state["meses_v"], mes_foco_atual)
-        if "cart_p1_df" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1_df"], st.session_state["meses_v"], mes_foco_atual)
-        if "fix_p1_df" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1_df"], mes_foco_atual)
-        if "prog_p1_df" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1_df"], mes_foco_atual)
+        meses_v = st.session_state.get("meses_v", [mes_foco_atual])
+        
+        if "rec_p1" in st.session_state: salvar_projecao("Pessoa 1", "RECEITA", st.session_state["rec_p1"], meses_v, mes_foco_atual)
+        if "cart_p1" in st.session_state: salvar_projecao("Pessoa 1", "CARTAO", st.session_state["cart_p1"], meses_v, mes_foco_atual)
+        if "fix_p1" in st.session_state: salvar_fixos("Pessoa 1", st.session_state["fix_p1"], mes_foco_atual)
+        if "prog_p1" in st.session_state: salvar_programado_cartao("Pessoa 1", st.session_state["prog_p1"], mes_foco_atual)
 
-        if "rec_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2_df"], st.session_state["meses_v"], mes_foco_atual)
-        if "cart_p2_df" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2_df"], st.session_state["meses_v"], mes_foco_atual)
-        if "fix_p2_df" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2_df"], mes_foco_atual)
-        if "prog_p2_df" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2_df"], mes_foco_atual)
+        if "rec_p2" in st.session_state: salvar_projecao("Pessoa 2", "RECEITA", st.session_state["rec_p2"], meses_v, mes_foco_atual)
+        if "cart_p2" in st.session_state: salvar_projecao("Pessoa 2", "CARTAO", st.session_state["cart_p2"], meses_v, mes_foco_atual)
+        if "fix_p2" in st.session_state: salvar_fixos("Pessoa 2", st.session_state["fix_p2"], mes_foco_atual)
+        if "prog_p2" in st.session_state: salvar_programado_cartao("Pessoa 2", st.session_state["prog_p2"], mes_foco_atual)
 
-        if "comuns_df" in st.session_state: salvar_comuns(st.session_state["comuns_df"], mes_foco_atual)
-        if "caixinha_df" in st.session_state: salvar_caixinha(st.session_state["caixinha_df"], mes_foco_atual)
+        if "comuns_editor" in st.session_state: salvar_comuns(st.session_state["comuns_editor"], mes_foco_atual)
+        if "caixinha_editor" in st.session_state: salvar_caixinha(st.session_state["caixinha_editor"], mes_foco_atual)
         
         salvar_ultimo_mes_banco(mes_foco_atual)
         st.success("Salvo com sucesso!")
@@ -538,46 +565,46 @@ if modo_visao.startswith("⚡"):
     patrimonio_final = d_foco['patrimonio_total_final']
 
     st.markdown(f"""
-        <div class="metrics-grid">
-            <div class="metric-box">
-                <span class="metric-title">1. Saldo Inicial Conta</span>
-                <span class="metric-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
+        <div class="exec-grid">
+            <div class="exec-box">
+                <span class="exec-title">1. Saldo Inicial Conta</span>
+                <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">2. Renda Total Família</span>
-                <span class="metric-val">R$ {d_foco['renda_mes']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">2. Renda Total Família</span>
+                <span class="exec-val" style="color:#34d399;">R$ {d_foco['renda_mes']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">3. Saídas Totais (Geral)</span>
-                <span class="metric-val">R$ {d_foco['saidas_mes']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">3. Saídas Totais (Geral)</span>
+                <span class="exec-val" style="color:#f87171;">R$ {d_foco['saidas_mes']:,.2f}</span>
             </div>
-            <div class="metric-box-reserva">
-                <span class="metric-title" style="color:#38bdf8;">🔒 4. Caixinha Guardada</span>
-                <span class="metric-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+            <div class="exec-box exec-box-reserva">
+                <span class="exec-title" style="color:#38bdf8;">🔒 4. Caixinha Guardada</span>
+                <span class="exec-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
-            <div class="metric-box-final">
-                <span class="metric-title" style="color:#a5b4fc;">5. Saldo Corrente Conta</span>
-                <span class="metric-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
+            <div class="exec-box exec-box-final">
+                <span class="exec-title" style="color:#a5b4fc;">5. Saldo Corrente Conta</span>
+                <span class="exec-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">👤 P1 (Lucas) Renda</span>
-                <span class="metric-val" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">👤 P1 (Lucas) Renda</span>
+                <span class="exec-val" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">👤 P1 (Lucas) Gastos</span>
-                <span class="metric-val" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">👤 P1 (Lucas) Gastos</span>
+                <span class="exec-val" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">👤 P2 (Marcella) Renda</span>
-                <span class="metric-val" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">👤 P2 (Marcella) Renda</span>
+                <span class="exec-val" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">👤 P2 (Marcella) Gastos</span>
-                <span class="metric-val" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">👤 P2 (Marcella) Gastos</span>
+                <span class="exec-val" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
             </div>
-            <div class="metric-box-patrimonio">
-                <span class="metric-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
-                <span class="metric-val" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
+            <div class="exec-box exec-box-patrimonio">
+                <span class="exec-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
+                <span class="exec-val" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -651,57 +678,58 @@ else:
     patrimonio_final = d_foco['patrimonio_total_final']
 
     st.markdown(f"""
-        <div class="metrics-grid">
-            <div class="metric-box">
-                <span class="metric-title">1. Saldo Inicial Conta</span>
-                <span class="metric-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
+        <div class="exec-grid">
+            <div class="exec-box">
+                <span class="exec-title">1. Saldo Inicial Conta</span>
+                <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">2. Renda Total Família</span>
-                <span class="metric-val">R$ {d_foco['renda_mes']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">2. Renda Total Família</span>
+                <span class="exec-val" style="color:#34d399;">R$ {d_foco['renda_mes']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">3. Saídas Totais (Geral)</span>
-                <span class="metric-val">R$ {d_foco['saidas_mes']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">3. Saídas Totais (Geral)</span>
+                <span class="exec-val" style="color:#f87171;">R$ {d_foco['saidas_mes']:,.2f}</span>
             </div>
-            <div class="metric-box-reserva">
-                <span class="metric-title" style="color:#38bdf8;">🔒 4. Caixinha Guardada</span>
-                <span class="metric-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
+            <div class="exec-box exec-box-reserva">
+                <span class="exec-title" style="color:#38bdf8;">🔒 4. Caixinha Guardada</span>
+                <span class="exec-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
-            <div class="metric-box-final">
-                <span class="metric-title" style="color:#a5b4fc;">5. Saldo Corrente Conta</span>
-                <span class="metric-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
+            <div class="exec-box exec-box-final">
+                <span class="exec-title" style="color:#a5b4fc;">5. Saldo Corrente Conta</span>
+                <span class="exec-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">👤 P1 (Lucas) Renda</span>
-                <span class="metric-val" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">👤 P1 (Lucas) Renda</span>
+                <span class="exec-val" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">👤 P1 (Lucas) Gastos</span>
-                <span class="metric-val" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">👤 P1 (Lucas) Gastos</span>
+                <span class="exec-val" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">👤 P2 (Marcella) Renda</span>
-                <span class="metric-val" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">👤 P2 (Marcella) Renda</span>
+                <span class="exec-val" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
             </div>
-            <div class="metric-box">
-                <span class="metric-title">👤 P2 (Marcella) Gastos</span>
-                <span class="metric-val" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
+            <div class="exec-box">
+                <span class="exec-title">👤 P2 (Marcella) Gastos</span>
+                <span class="exec-val" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
             </div>
-            <div class="metric-box-patrimonio">
-                <span class="metric-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
-                <span class="metric-val" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
+            <div class="exec-box exec-box-patrimonio">
+                <span class="exec-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
+                <span class="exec-val" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
     st.divider()
 
-    tab_p1, tab_p2, tab_comuns, tab_consolidado = st.tabs([
+    # Reordenado: Aba Consolidada agora é a primeira
+    tab_consolidado, tab_p1, tab_p2, tab_comuns = st.tabs([
+        "🏠 Visão Consolidada & Caixinha",
         "👤 Pessoa 1 (Lucas)", 
         "👤 Pessoa 2 (Marcella)", 
-        "🏡 Despesas Comuns (Casa/Aluguel)",
-        "🏠 Visão Consolidada & Caixinha"
+        "🏡 Despesas Comuns (Casa/Aluguel)"
     ])
 
     def renderizar_pessoa(pessoa, p_code):
@@ -730,7 +758,7 @@ else:
             df_rec_grid, num_rows="fixed", use_container_width=True, key=f"rec_{p_code}", height=190,
             column_config=conf_rec
         )
-        st.session_state[f"rec_{p_code}_df"] = df_rec_edit
+        st.session_state[f"rec_{p_code}"] = df_rec_edit
 
         st.divider()
 
@@ -779,7 +807,7 @@ else:
             df_cart_grid, num_rows="fixed", use_container_width=True, key=f"cart_{p_code}", height=220,
             column_config=conf_cart
         )
-        st.session_state[f"cart_{p_code}_df"] = df_cart_edit
+        st.session_state[f"cart_{p_code}"] = df_cart_edit
 
         st.divider()
 
@@ -793,7 +821,7 @@ else:
                 "valor": st.column_config.NumberColumn("Valor Previsto (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"prog_{p_code}_df"] = df_prog_edit
+        st.session_state[f"prog_{p_code}"] = df_prog_edit
 
         st.divider()
 
@@ -806,7 +834,7 @@ else:
                 "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0)
             }
         )
-        st.session_state[f"fix_{p_code}_df"] = df_fixos_edit
+        st.session_state[f"fix_{p_code}"] = df_fixos_edit
 
         st.divider()
 
@@ -824,24 +852,6 @@ else:
                     st.rerun()
         else:
             st.info("Nenhum gasto em PIX/dinheiro registrado para este mês.")
-
-    with tab_p1:
-        renderizar_pessoa("Pessoa 1", "p1")
-
-    with tab_p2:
-        renderizar_pessoa("Pessoa 2", "p2")
-
-    with tab_comuns:
-        st.header("🏡 Despesas Comuns do Casal / Casa")
-        df_comuns_edit = st.data_editor(
-            df_comuns_all, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
-            column_config={
-                "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
-                "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0),
-                "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
-            }
-        )
-        st.session_state["comuns_df"] = df_comuns_edit
 
     with tab_consolidado:
         st.header("🏠 Visão Consolidada, Caixinha & Totais")
@@ -878,7 +888,7 @@ else:
                 "Total Acumulado na Caixinha (R$)": st.column_config.NumberColumn("Total Acumulado na Caixinha (R$)", format="R$ %.2f", disabled=True)
             }
         )
-        st.session_state["caixinha_df"] = df_caixinha_edit
+        st.session_state["caixinha_editor"] = df_caixinha_edit
 
         st.divider()
 
@@ -914,3 +924,21 @@ else:
         
         cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
         st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=280)
+
+    with tab_p1:
+        renderizar_pessoa("Pessoa 1", "p1")
+
+    with tab_p2:
+        renderizar_pessoa("Pessoa 2", "p2")
+
+    with tab_comuns:
+        st.header("🏡 Despesas Comuns do Casal / Casa")
+        df_comuns_edit = st.data_editor(
+            df_comuns_all, num_rows="dynamic", use_container_width=True, key="comuns_editor", height=220,
+            column_config={
+                "item": st.column_config.TextColumn("Descrição da Despesa Comum"),
+                "valor": st.column_config.NumberColumn("Valor Mensal (R$)", format="R$ %.2f", min_value=0.0),
+                "pagador": st.column_config.SelectboxColumn("Responsável pelo Pagamento", options=["Pessoa 1", "Pessoa 2", "Dividido (50/50)"])
+            }
+        )
+        st.session_state["comuns_editor"] = df_comuns_edit
