@@ -292,13 +292,18 @@ def get_fixos_no_mes(pessoa, mes_tela):
     if df_fixos_all.empty:
         return pd.DataFrame(columns=['item', 'valor'])
     
-    df_p = df_fixos_all[df_fixos_all['pessoa'] == pessoa]
+    df_p = df_fixos_all[df_fixos_all['pessoa'] == pessoa].copy()
+    
+    # Tratamento contra valores Nulos no mes_ano
+    df_p = df_p[df_p['mes_ano'].notnull()]
+    df_p['mes_ano'] = df_p['mes_ano'].astype(str)
+    
     df_mes = df_p[df_p['mes_ano'] == mes_b]
     
     if not df_mes.empty:
         return df_mes[['item', 'valor']]
     
-    meses_anteriores = [m for m in df_p['mes_ano'].unique() if m <= mes_b]
+    meses_anteriores = [m for m in df_p['mes_ano'].unique() if str(m) <= mes_b]
     if meses_anteriores:
         ultimo_m = max(meses_anteriores)
         return df_p[df_p['mes_ano'] == ultimo_m][['item', 'valor']]
@@ -310,14 +315,20 @@ def get_comuns_no_mes(mes_tela):
     if df_comuns_all.empty:
         return pd.DataFrame(columns=['item', 'valor', 'pagador'])
     
-    df_mes = df_comuns_all[df_comuns_all['mes_ano'] == mes_b]
+    df_c = df_comuns_all.copy()
+    
+    # Tratamento contra valores Nulos no mes_ano
+    df_c = df_c[df_c['mes_ano'].notnull()]
+    df_c['mes_ano'] = df_c['mes_ano'].astype(str)
+    
+    df_mes = df_c[df_c['mes_ano'] == mes_b]
     if not df_mes.empty:
         return df_mes[['item', 'valor', 'pagador']]
     
-    meses_anteriores = [m for m in df_comuns_all['mes_ano'].unique() if m <= mes_b]
+    meses_anteriores = [m for m in df_c['mes_ano'].unique() if str(m) <= mes_b]
     if meses_anteriores:
         ultimo_m = max(meses_anteriores)
-        return df_comuns_all[df_comuns_all['mes_ano'] == ultimo_m][['item', 'valor', 'pagador']]
+        return df_c[df_c['mes_ano'] == ultimo_m][['item', 'valor', 'pagador']]
         
     return pd.DataFrame(columns=['item', 'valor', 'pagador'])
 
