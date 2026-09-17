@@ -1,4 +1,5 @@
 import os
+import io
 from datetime import datetime
 import streamlit as st
 import pandas as pd
@@ -11,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado Otimizado
+# 2. CSS Otimizado com Suporte a Estilos Dinâmicos
 st.markdown("""
     <style>
         .block-container {
@@ -51,6 +52,7 @@ st.markdown("""
         .exec-box-reserva { background: #0c2340; border: 1px solid #0284c7; }
         .exec-box-final { background: #1e1b4b; border: 1px solid #6366f1; }
         .exec-box-patrimonio { background: #422006; border: 1px solid #d97706; grid-column: span 2; }
+        .exec-box-alerta { background: #450a0a !important; border: 1px solid #ef4444 !important; }
         
         .exec-title { font-size: 0.65rem; color: #9ca3af; font-weight: 500; margin-bottom: 2px; }
         .exec-val { font-size: 0.88rem; font-weight: 700; color: #f3f4f6; }
@@ -146,7 +148,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão com Supabase
+# 4. Conexão Otimizada com Supabase (PgBouncer/Connection Pool Ready)
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -158,8 +160,8 @@ def get_db_engine():
     
     return create_engine(
         db_url,
-        pool_size=2,
-        max_overflow=3,
+        pool_size=3,
+        max_overflow=5,
         pool_recycle=60,
         pool_pre_ping=True,
         connect_args={"connect_timeout": 5}
@@ -331,36 +333,41 @@ def get_programado_cartao(pessoa):
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# Funções de Escrita em Banco
+# 5. Escritas em Lote (Bulk Upsert de Alta Performance)
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
-        query = '''
+        query = text('''
             INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
             VALUES (:pessoa, :tipo, :item, :mes, :val)
             ON CONFLICT (pessoa, tipo, item, mes_ano) 
             DO UPDATE SET valor = EXCLUDED.valor;
-        '''
-        conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": safe_float(valor)})
+        ''')
+        conn.execute(query, {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": safe_float(valor)})
     salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
 
 def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
-    with engine.begin() as conn:
-        for _, row in df_editado.iterrows():
-            item = str(row['Item'])
-            if "Total" in item:
-                continue
-            for mes_t in meses_visiveis:
-                mes_b = mes_tela_para_banco(mes_t)
-                val = safe_float(row[mes_t])
-                query = '''
-                    INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
-                    VALUES (:pessoa, :tipo, :item, :mes, :val)
-                    ON CONFLICT (pessoa, tipo, item, mes_ano) 
-                    DO UPDATE SET valor = EXCLUDED.valor;
-                '''
-                conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": val})
+    payload = []
+    for _, row in df_editado.iterrows():
+        item = str(row['Item'])
+        if "Total" in item:
+            continue
+        for mes_t in meses_visiveis:
+            mes_b = mes_tela_para_banco(mes_t)
+            val = safe_float(row[mes_t])
+            payload.append({"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": val})
+            
+    if payload:
+        with engine.begin() as conn:
+            query = text('''
+                INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
+                VALUES (:pessoa, :tipo, :item, :mes, :val)
+                ON CONFLICT (pessoa, tipo, item, mes_ano) 
+                DO UPDATE SET valor = EXCLUDED.valor;
+            ''')
+            conn.execute(query, payload)
+            
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
@@ -368,19 +375,23 @@ def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
     idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
     meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
     
+    payload = []
     with engine.begin() as conn:
         for m_t in meses_afetados_tela:
             m_b = mes_tela_para_banco(m_t)
             conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"), {"pessoa": pessoa, "mes": m_b})
             for _, row in df_editado.iterrows():
                 if str(row['item']).strip():
-                    query = '''
-                        INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor)
-                        VALUES (:pessoa, :item, :mes, :val)
-                        ON CONFLICT (pessoa, item, mes_ano)
-                        DO UPDATE SET valor = EXCLUDED.valor;
-                    '''
-                    conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "mes": m_b, "val": safe_float(row['valor'])})
+                    payload.append({"pessoa": pessoa, "item": str(row['item']), "mes": m_b, "val": safe_float(row['valor'])})
+        
+        if payload:
+            query = text('''
+                INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor)
+                VALUES (:pessoa, :item, :mes, :val)
+                ON CONFLICT (pessoa, item, mes_ano)
+                DO UPDATE SET valor = EXCLUDED.valor;
+            ''')
+            conn.execute(query, payload)
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
@@ -389,6 +400,7 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
     idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
     meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
     
+    payload = []
     with engine.begin() as conn:
         for m_t in meses_afetados_tela:
             m_b = mes_tela_para_banco(m_t)
@@ -396,13 +408,16 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
             for _, row in df_editado.iterrows():
                 if str(row['item']).strip():
                     pag = str(row.get('pagador', 'Dividido (50/50)'))
-                    query = '''
-                        INSERT INTO gastos_comuns (item, mes_ano, valor, pagador)
-                        VALUES (:item, :mes, :val, :pag)
-                        ON CONFLICT (item, mes_ano)
-                        DO UPDATE SET valor = EXCLUDED.valor, pagador = EXCLUDED.pagador;
-                    '''
-                    conn.execute(text(query), {"item": str(row['item']), "mes": m_b, "val": safe_float(row['valor']), "pag": pag})
+                    payload.append({"item": str(row['item']), "mes": m_b, "val": safe_float(row['valor']), "pag": pag})
+        
+        if payload:
+            query = text('''
+                INSERT INTO gastos_comuns (item, mes_ano, valor, pagador)
+                VALUES (:item, :mes, :val, :pag)
+                ON CONFLICT (item, mes_ano)
+                DO UPDATE SET valor = EXCLUDED.valor, pagador = EXCLUDED.pagador;
+            ''')
+            conn.execute(query, payload)
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
@@ -436,11 +451,11 @@ def resetar_todos_status_faturas():
 def inserir_gasto_rapido(mes_tela, pessoa, descricao, categoria, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
-        query = '''
+        query = text('''
             INSERT INTO pontuais_dinheiro (mes_ano, pessoa, descricao, categoria, valor)
             VALUES (:mes_ano, :pessoa, :descricao, :categoria, :valor)
-        '''
-        conn.execute(text(query), {
+        ''')
+        conn.execute(query, {
             "mes_ano": mes_b, "pessoa": pessoa, "descricao": descricao,
             "categoria": categoria, "valor": safe_float(valor)
         })
@@ -453,22 +468,28 @@ def deletar_gasto_pontual(gasto_id):
     st.cache_data.clear()
 
 def salvar_caixinha(df_editado, mes_atual_foco):
-    with engine.begin() as conn:
-        for _, row in df_editado.iterrows():
-            mes_t = row['Mês']
-            mes_b = mes_tela_para_banco(mes_t)
-            val = safe_float(row['Aporte do Mês (R$)'])
-            query = '''
+    payload = []
+    for _, row in df_editado.iterrows():
+        mes_t = row['Mês']
+        mes_b = mes_tela_para_banco(mes_t)
+        val = safe_float(row['Aporte do Mês (R$)'])
+        payload.append({"mes": mes_b, "val": val})
+        
+    if payload:
+        with engine.begin() as conn:
+            query = text('''
                 INSERT INTO caixinha (mes_ano, valor)
                 VALUES (:mes, :val)
                 ON CONFLICT (mes_ano)
                 DO UPDATE SET valor = EXCLUDED.valor;
-            '''
-            conn.execute(text(query), {"mes": mes_b, "val": val})
+            ''')
+            conn.execute(query, payload)
+            
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
 def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
+    payload = []
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM programado_cartao WHERE pessoa = :pessoa"), {"pessoa": pessoa})
         for _, row in df_editado.iterrows():
@@ -476,12 +497,16 @@ def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
                 cartao_val = str(row['cartao']) if pd.notnull(row.get('cartao')) else ESTRUTURA_CARTÕES_BASE[pessoa][0]
                 desc_val = str(row['descricao'])
                 val_val = safe_float(row.get('valor'))
-                query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
-                conn.execute(text(query), {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
+                payload.append({"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
+                
+        if payload:
+            query = text("INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)")
+            conn.execute(query, payload)
+            
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
-# Motor de Cálculo Financeiro Ajustado com a Visão Dupla de Saldo
+# 6. Motor de Cálculo Financeiro (Com Saldo Duplo e Caixa Vivo)
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
@@ -544,7 +569,7 @@ def calcular_sequencia_financeira():
         saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
-        # Visão Dupla de Saldo:
+        # Visão Dupla de Saldo
         saldo_herdeiro_abertura = saldo_acumulado_anterior
         saldo_disponivel_hoje = saldo_herdeiro_abertura - pontual_mes
         
@@ -568,7 +593,7 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# MENU LATERAL (SIDEBAR)
+# 7. MENU LATERAL (SIDEBAR)
 with st.sidebar:
     st.markdown("### ⚙️ Menu de Controle")
 
@@ -595,6 +620,18 @@ with st.sidebar:
         modo_exibicao = "6 Meses"
 
     st.divider()
+    
+    # Exportação de Dados para Backup/Relatório em CSV
+    if st.download_button(
+        label="📥 Exportar Projeções (CSV)",
+        data=pd.DataFrame(dados_financeiros).T.to_csv(index_label="Mês").encode("utf-8"),
+        file_name=f"relatorio_financeiro_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        use_container_width=True
+    ):
+        st.info("Download do relatório iniciado!")
+
+    st.divider()
     if st.button("🚪 Sair do Sistema", use_container_width=True):
         st.session_state["autenticado"] = False
         st.rerun()
@@ -611,8 +648,12 @@ d_foco = dados_financeiros.get(mes_atual, {
     "patrimonio_total_final": 0.0
 })
 
+# Lógica Dinâmica para Alerta Vermelho em Caso de Saldo Negativo
+class_disp = "exec-box-alerta" if d_foco['saldo_disponivel_hoje'] < 0 else "exec-box-disponivel"
+class_final = "exec-box-alerta" if d_foco['saldo_acumulado_final'] < 0 else "exec-box-final"
+
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO
+# SEÇÃO 1: MODO RÁPIDO (DIA A DIA)
 # ====================================================================
 if modo_visao.startswith("⚡"):
     st.markdown(f"### ⚡ Painel Diário Rápido — **{mes_atual}**")
@@ -627,7 +668,7 @@ if modo_visao.startswith("⚡"):
                 <span class="exec-title">1. Saldo Inicial (Abertura Mês)</span>
                 <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="exec-box exec-box-disponivel">
+            <div class="exec-box {class_disp}">
                 <span class="exec-title" style="color:#6ee7b7;">2. Saldo Disponível Hoje (Em Conta)</span>
                 <span class="exec-val" style="color:#6ee7b7;">R$ {d_foco['saldo_disponivel_hoje']:,.2f}</span>
             </div>
@@ -643,7 +684,7 @@ if modo_visao.startswith("⚡"):
                 <span class="exec-title" style="color:#38bdf8;">🔒 5. Caixinha Guardada</span>
                 <span class="exec-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
-            <div class="exec-box exec-box-final">
+            <div class="exec-box {class_final}">
                 <span class="exec-title" style="color:#a5b4fc;">6. Saldo Corrente Previsto (Fim Mês)</span>
                 <span class="exec-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
             </div>
@@ -744,7 +785,7 @@ else:
                 <span class="exec-title">1. Saldo Inicial (Abertura Mês)</span>
                 <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="exec-box exec-box-disponivel">
+            <div class="exec-box {class_disp}">
                 <span class="exec-title" style="color:#6ee7b7;">2. Saldo Disponível Hoje (Em Conta)</span>
                 <span class="exec-val" style="color:#6ee7b7;">R$ {d_foco['saldo_disponivel_hoje']:,.2f}</span>
             </div>
@@ -760,7 +801,7 @@ else:
                 <span class="exec-title" style="color:#38bdf8;">🔒 5. Caixinha Guardada</span>
                 <span class="exec-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
-            <div class="exec-box exec-box-final">
+            <div class="exec-box {class_final}">
                 <span class="exec-title" style="color:#a5b4fc;">6. Saldo Corrente Previsto (Fim Mês)</span>
                 <span class="exec-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
             </div>
@@ -989,6 +1030,8 @@ else:
         row_reserva_acum = {"Métrica": "8. Caixinha Acumulada (Reserva)"}
         row_patrimonio = {"Métrica": "9. Patrimônio Total Geral"}
 
+        dados_grafico = []
+
         for m_t in meses_visiveis:
             d = dados_financeiros.get(m_t, {
                 "saldo_anterior": 0.0, "saldo_disponivel_hoje": 0.0, "renda_mes": 0.0,
@@ -1004,6 +1047,13 @@ else:
             row_sal_fim[m_t] = d["saldo_acumulado_final"]
             row_reserva_acum[m_t] = d["caixinha_acumulada"]
             row_patrimonio[m_t] = d["patrimonio_total_final"]
+            
+            dados_grafico.append({
+                "Mês": m_t,
+                "Patrimônio Total": d["patrimonio_total_final"],
+                "Saldo Conta": d["saldo_acumulado_final"],
+                "Caixinha": d["caixinha_acumulada"]
+            })
 
         df_resumo = pd.DataFrame([
             row_sal_ini, row_sal_disp, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
@@ -1011,6 +1061,13 @@ else:
         
         cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
         st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=310)
+
+        st.divider()
+        
+        # Gráfico Sintético de Evolução do Patrimônio Familiar
+        st.subheader("📈 Curva de Crescimento do Patrimônio Familiar")
+        df_chart = pd.DataFrame(dados_grafico).set_index("Mês")
+        st.line_chart(df_chart, use_container_width=True)
 
     with tab_p1:
         renderizar_pessoa("Pessoa 1", "p1")
