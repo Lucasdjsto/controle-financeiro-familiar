@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Otimizado para Mobile e Desktop
+# 2. CSS Customizado
 st.markdown("""
     <style>
         .block-container {
@@ -293,8 +293,6 @@ def get_fixos_no_mes(pessoa, mes_tela):
         return pd.DataFrame(columns=['item', 'valor'])
     
     df_p = df_fixos_all[df_fixos_all['pessoa'] == pessoa].copy()
-    
-    # Migração transparente: se o registro legado não tinha mes_ano (NULL), atribui uma data base inicial
     df_p['mes_ano'] = df_p['mes_ano'].fillna("08.2026").astype(str)
     
     df_mes = df_p[df_p['mes_ano'] == mes_b]
@@ -306,7 +304,6 @@ def get_fixos_no_mes(pessoa, mes_tela):
         ultimo_m = max(meses_anteriores)
         return df_p[df_p['mes_ano'] == ultimo_m][['item', 'valor']]
     
-    # Se não achar nenhuma data anterior, pega os dados legados como padrão
     return df_p[['item', 'valor']]
 
 def get_comuns_no_mes(mes_tela):
@@ -315,8 +312,6 @@ def get_comuns_no_mes(mes_tela):
         return pd.DataFrame(columns=['item', 'valor', 'pagador'])
     
     df_c = df_comuns_all.copy()
-    
-    # Migração transparente: se o registro legado não tinha mes_ano (NULL), atribui uma data base inicial
     df_c['mes_ano'] = df_c['mes_ano'].fillna("08.2026").astype(str)
     
     df_mes = df_c[df_c['mes_ano'] == mes_b]
@@ -328,7 +323,6 @@ def get_comuns_no_mes(mes_tela):
         ultimo_m = max(meses_anteriores)
         return df_c[df_c['mes_ano'] == ultimo_m][['item', 'valor', 'pagador']]
         
-    # Se não achar nenhuma data anterior, recupera o cadastro legado
     return df_c[['item', 'valor', 'pagador']]
 
 def get_programado_cartao(pessoa):
@@ -412,7 +406,6 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
 
-# Ação Direta Manual: Fechar e Arquivar o Mês
 def arquivar_mes_manual(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -427,7 +420,6 @@ def arquivar_mes_manual(mes_tela):
     salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
 
-# Ação Direta Manual: Reabrir Mês
 def reabrir_mes_manual(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -488,7 +480,7 @@ def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
-# Cálculo Financeiro
+# Motor de Cálculo Financeiro Ajustado com a Lógica de Caixa Vivo
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
@@ -551,6 +543,7 @@ def calcular_sequencia_financeira():
         saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
+        # Ajuste de Caixa Vivo: O saldo disponível herda o passado e já desconta o PIX/dinheiro do mês em tempo real
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
         patrimonio_total_final = saldo_conta_final + caixinha_acumulada_geral
 
@@ -624,7 +617,7 @@ if modo_visao.startswith("⚡"):
     st.markdown(f"""
         <div class="exec-grid">
             <div class="exec-box">
-                <span class="exec-title">1. Saldo Inicial Conta</span>
+                <span class="exec-title">1. Saldo Herdeiro (Mês Ant.)</span>
                 <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
             <div class="exec-box">
@@ -737,7 +730,7 @@ else:
     st.markdown(f"""
         <div class="exec-grid">
             <div class="exec-box">
-                <span class="exec-title">1. Saldo Inicial Conta</span>
+                <span class="exec-title">1. Saldo Herdeiro (Mês Ant.)</span>
                 <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
             <div class="exec-box">
@@ -901,7 +894,6 @@ else:
     with tab_consolidado:
         st.header("🏠 Visão Consolidada, Caixinha & Totais")
         
-        # Painel de Controle de Encerramento e Congelamento do Mês
         st.subheader(f"🔒 Encerramento e Congelamento do Mês — **{mes_atual}**")
         mes_b_atual = mes_tela_para_banco(mes_atual)
         st_match = df_status_all[df_status_all['mes_ano'] == mes_b_atual] if not df_status_all.empty else pd.DataFrame()
@@ -972,7 +964,7 @@ else:
 
         st.subheader("📅 Projeção Evolutiva Mês a Mês & Saldo de Caixa Acumulado")
         
-        row_sal_ini = {"Métrica": "1. Saldo Inicial em Conta"}
+        row_sal_ini = {"Métrica": "1. Saldo Herdeiro (Mês Ant.)"}
         row_rec = {"Métrica": "2. Renda Total Família"}
         row_desp = {"Métrica": "3. Saídas Totais (Cartão + Fixos + PIX)"}
         row_caixinha = {"Métrica": "4. Aporte Caixinha (Mês)"}
