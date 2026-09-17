@@ -12,16 +12,25 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado Otimizado (Design Sistemático e Responsivo)
+# 2. CSS Customizado Ajustado para Não Cortar o Topo no Mobile
 st.markdown("""
     <style>
+        /* Ajuste de margem superior para não encavalar na barra do Streamlit Cloud */
         .block-container {
-            padding-top: 0.6rem !important;
+            padding-top: 2.8rem !important;
             padding-bottom: 0.8rem !important;
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
         }
         
+        /* Ajuste de tamanho dos títulos principais */
+        h1, h2, h3 {
+            font-size: 1.15rem !important;
+            margin-top: 0.2rem !important;
+            margin-bottom: 0.4rem !important;
+            line-height: 1.2 !important;
+        }
+
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
             font-size: 0.78rem !important;
         }
@@ -30,18 +39,18 @@ st.markdown("""
             padding: 2px 4px !important;
         }
 
-        /* --- TELA DE LOGIN --- */
+        /* TELA DE LOGIN */
         .login-card {
             background: #111827;
             border: 1px solid #374151;
             border-radius: 12px;
-            padding: 1.5rem;
-            max-width: 400px;
-            margin: 2rem auto;
+            padding: 1.2rem;
+            max-width: 380px;
+            margin: 1.5rem auto;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
         }
         .login-title {
-            font-size: 1.1rem !important;
+            font-size: 1.05rem !important;
             font-weight: 700;
             color: #f3f4f6;
             text-align: center;
@@ -51,10 +60,10 @@ st.markdown("""
             font-size: 0.75rem !important;
             color: #9ca3af;
             text-align: center;
-            margin-bottom: 1.2rem;
+            margin-bottom: 1rem;
         }
         
-        /* --- DASHBOARD EXEC GRID --- */
+        /* DASHBOARD EXEC GRID */
         .exec-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -71,13 +80,6 @@ st.markdown("""
             display: flex;
             flex-direction: column;
             justify-content: center;
-            transition: transform 0.15s ease-in-out;
-        }
-        
-        .exec-box-hero {
-            grid-column: span 2;
-            background: linear-gradient(135deg, #064e3b 0%, #022c22 100%);
-            border: 1px solid #059669;
         }
         
         .exec-box-disponivel { background: linear-gradient(135deg, #064e3b 0%, #047857 100%); border: 1px solid #10b981; }
@@ -86,9 +88,9 @@ st.markdown("""
         .exec-box-patrimonio { background: linear-gradient(135deg, #422006 0%, #b45309 100%); border: 1px solid #f59e0b; grid-column: span 2; }
         .exec-box-alerta { background: linear-gradient(135deg, #450a0a 0%, #991b1b 100%) !important; border: 1px solid #ef4444 !important; }
         
-        .exec-title { font-size: 0.68rem; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
-        .exec-val { font-size: 0.95rem; font-weight: 700; color: #f3f4f6; }
-        .exec-val-large { font-size: 1.25rem; font-weight: 800; color: #ffffff; }
+        .exec-title { font-size: 0.65rem; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+        .exec-val { font-size: 0.92rem; font-weight: 700; color: #f3f4f6; }
+        .exec-val-large { font-size: 1.15rem; font-weight: 800; color: #ffffff; }
 
         .stTabs [data-baseweb="tab-list"] {
             gap: 4px;
@@ -128,8 +130,10 @@ st.markdown("""
         }
 
         @media (min-width: 768px) {
+            .block-container {
+                padding-top: 3.2rem !important;
+            }
             .exec-grid { grid-template-columns: repeat(4, 1fr); }
-            .exec-box-hero { grid-column: span 2; }
             .exec-box-patrimonio { grid-column: span 4; }
         }
     </style>
@@ -165,7 +169,7 @@ def mes_tela_para_banco(mes_tela):
     except:
         return mes_tela
 
-# 3. Autenticação por Senha Ajustada (Layout Redimensionado)
+# 3. Autenticação por Senha
 def verificar_senha():
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
@@ -173,7 +177,6 @@ def verificar_senha():
     if st.session_state["autenticado"]:
         return True
 
-    # Centralização responsiva da tela de login
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
@@ -711,7 +714,6 @@ if modo_visao.startswith("⚡"):
     caixinha_acum = d_foco['caixinha_acumulada']
     patrimonio_final = d_foco['patrimonio_total_final']
 
-    # Grid Visual com Hierarquia Clara de Informações
     st.markdown(f"""
         <div class="exec-grid">
             <div class="exec-box">
