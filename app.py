@@ -12,14 +12,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Otimizado com Suporte a Estilos Dinâmicos
+# 2. CSS Customizado Otimizado (Design Sistemático e Responsivo)
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 0.5rem !important;
+            padding-top: 0.6rem !important;
             padding-bottom: 0.8rem !important;
-            padding-left: 0.4rem !important;
-            padding-right: 0.4rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
         }
         
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
@@ -29,33 +29,66 @@ st.markdown("""
         .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
             padding: 2px 4px !important;
         }
+
+        /* --- TELA DE LOGIN --- */
+        .login-card {
+            background: #111827;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-width: 400px;
+            margin: 2rem auto;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+        .login-title {
+            font-size: 1.1rem !important;
+            font-weight: 700;
+            color: #f3f4f6;
+            text-align: center;
+            margin-bottom: 0.2rem;
+        }
+        .login-subtitle {
+            font-size: 0.75rem !important;
+            color: #9ca3af;
+            text-align: center;
+            margin-bottom: 1.2rem;
+        }
         
+        /* --- DASHBOARD EXEC GRID --- */
         .exec-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 6px;
+            gap: 8px;
             width: 100%;
-            margin-bottom: 0.6rem;
+            margin-bottom: 0.8rem;
         }
         
         .exec-box {
             background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
             border: 1px solid #374151;
-            border-radius: 8px;
-            padding: 8px 10px;
+            border-radius: 10px;
+            padding: 10px 12px;
             display: flex;
             flex-direction: column;
             justify-content: center;
+            transition: transform 0.15s ease-in-out;
         }
         
-        .exec-box-disponivel { background: #064e3b; border: 1px solid #059669; }
-        .exec-box-reserva { background: #0c2340; border: 1px solid #0284c7; }
-        .exec-box-final { background: #1e1b4b; border: 1px solid #6366f1; }
-        .exec-box-patrimonio { background: #422006; border: 1px solid #d97706; grid-column: span 2; }
-        .exec-box-alerta { background: #450a0a !important; border: 1px solid #ef4444 !important; }
+        .exec-box-hero {
+            grid-column: span 2;
+            background: linear-gradient(135deg, #064e3b 0%, #022c22 100%);
+            border: 1px solid #059669;
+        }
         
-        .exec-title { font-size: 0.65rem; color: #9ca3af; font-weight: 500; margin-bottom: 2px; }
-        .exec-val { font-size: 0.88rem; font-weight: 700; color: #f3f4f6; }
+        .exec-box-disponivel { background: linear-gradient(135deg, #064e3b 0%, #047857 100%); border: 1px solid #10b981; }
+        .exec-box-reserva { background: linear-gradient(135deg, #0c2340 0%, #0369a1 100%); border: 1px solid #0284c7; }
+        .exec-box-final { background: linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%); border: 1px solid #6366f1; }
+        .exec-box-patrimonio { background: linear-gradient(135deg, #422006 0%, #b45309 100%); border: 1px solid #f59e0b; grid-column: span 2; }
+        .exec-box-alerta { background: linear-gradient(135deg, #450a0a 0%, #991b1b 100%) !important; border: 1px solid #ef4444 !important; }
+        
+        .exec-title { font-size: 0.68rem; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+        .exec-val { font-size: 0.95rem; font-weight: 700; color: #f3f4f6; }
+        .exec-val-large { font-size: 1.25rem; font-weight: 800; color: #ffffff; }
 
         .stTabs [data-baseweb="tab-list"] {
             gap: 4px;
@@ -79,15 +112,25 @@ st.markdown("""
         }
 
         .stButton > button {
-            border-radius: 5px;
+            border-radius: 6px;
             font-weight: 600;
-            padding: 3px 8px;
+            padding: 4px 10px;
             font-size: 0.78rem;
         }
 
+        .section-header {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #9ca3af;
+            text-transform: uppercase;
+            margin: 0.6rem 0 0.3rem 0;
+            letter-spacing: 0.5px;
+        }
+
         @media (min-width: 768px) {
-            .exec-grid { grid-template-columns: repeat(3, 1fr); }
-            .exec-box-patrimonio { grid-column: span 3; }
+            .exec-grid { grid-template-columns: repeat(4, 1fr); }
+            .exec-box-hero { grid-column: span 2; }
+            .exec-box-patrimonio { grid-column: span 4; }
         }
     </style>
 """, unsafe_allow_html=True)
@@ -122,7 +165,7 @@ def mes_tela_para_banco(mes_tela):
     except:
         return mes_tela
 
-# 3. Autenticação por Senha
+# 3. Autenticação por Senha Ajustada (Layout Redimensionado)
 def verificar_senha():
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
@@ -130,25 +173,34 @@ def verificar_senha():
     if st.session_state["autenticado"]:
         return True
 
-    st.title("🔒 Acesso Restrito - Gestão Financeira")
+    # Centralização responsiva da tela de login
+    col1, col2, col3 = st.columns([1, 2, 1])
     
-    with st.form("form_login"):
-        senha_digitada = st.text_input("Digite a senha de acesso:", type="password")
-        botao_entrar = st.form_submit_button("Entrar")
+    with col2:
+        st.markdown("""
+            <div class="login-card">
+                <div class="login-title">🔐 Controle Financeiro</div>
+                <div class="login-subtitle">Acesso restrito ao painel da família</div>
+            </div>
+        """, unsafe_allow_html=True)
         
-        if botao_entrar:
-            if senha_digitada == "pretabebe":
-                st.session_state["autenticado"] = True
-                st.success("Acesso liberado!")
-                st.rerun()
-            else:
-                st.error("Senha incorreta!")
+        with st.form("form_login"):
+            senha_digitada = st.text_input("Senha de acesso:", type="password", placeholder="Digite sua senha")
+            botao_entrar = st.form_submit_button("Entrar no Sistema", use_container_width=True, type="primary")
+            
+            if botao_entrar:
+                if senha_digitada == "pretabebe":
+                    st.session_state["autenticado"] = True
+                    st.success("Acesso liberado!")
+                    st.rerun()
+                else:
+                    st.error("Senha incorreta!")
     return False
 
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão Otimizada com Supabase (PgBouncer/Connection Pool Ready)
+# 4. Conexão Otimizada com Supabase
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -333,7 +385,7 @@ def get_programado_cartao(pessoa):
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# 5. Escritas em Lote (Bulk Upsert de Alta Performance)
+# Escritas em Lote
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -506,7 +558,7 @@ def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
-# 6. Motor de Cálculo Financeiro (Com Saldo Duplo e Caixa Vivo)
+# Motor de Cálculo Financeiro
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
@@ -569,7 +621,6 @@ def calcular_sequencia_financeira():
         saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
-        # Visão Dupla de Saldo
         saldo_herdeiro_abertura = saldo_acumulado_anterior
         saldo_disponivel_hoje = saldo_herdeiro_abertura - pontual_mes
         
@@ -593,7 +644,7 @@ def calcular_sequencia_financeira():
 
 dados_financeiros = calcular_sequencia_financeira()
 
-# 7. MENU LATERAL (SIDEBAR)
+# MENU LATERAL (SIDEBAR)
 with st.sidebar:
     st.markdown("### ⚙️ Menu de Controle")
 
@@ -621,7 +672,6 @@ with st.sidebar:
 
     st.divider()
     
-    # Exportação de Dados para Backup/Relatório em CSV
     if st.download_button(
         label="📥 Exportar Projeções (CSV)",
         data=pd.DataFrame(dados_financeiros).T.to_csv(index_label="Mês").encode("utf-8"),
@@ -648,12 +698,11 @@ d_foco = dados_financeiros.get(mes_atual, {
     "patrimonio_total_final": 0.0
 })
 
-# Lógica Dinâmica para Alerta Vermelho em Caso de Saldo Negativo
 class_disp = "exec-box-alerta" if d_foco['saldo_disponivel_hoje'] < 0 else "exec-box-disponivel"
 class_final = "exec-box-alerta" if d_foco['saldo_acumulado_final'] < 0 else "exec-box-final"
 
 # ====================================================================
-# SEÇÃO 1: MODO RÁPIDO (DIA A DIA)
+# SEÇÃO 1: MODO RÁPIDO (REVISITADO VISUALMENTE)
 # ====================================================================
 if modo_visao.startswith("⚡"):
     st.markdown(f"### ⚡ Painel Diário Rápido — **{mes_atual}**")
@@ -662,22 +711,23 @@ if modo_visao.startswith("⚡"):
     caixinha_acum = d_foco['caixinha_acumulada']
     patrimonio_final = d_foco['patrimonio_total_final']
 
+    # Grid Visual com Hierarquia Clara de Informações
     st.markdown(f"""
         <div class="exec-grid">
             <div class="exec-box">
-                <span class="exec-title">1. Saldo Inicial (Abertura Mês)</span>
+                <span class="exec-title">🏦 1. Saldo Inicial Abertura</span>
                 <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
             <div class="exec-box {class_disp}">
-                <span class="exec-title" style="color:#6ee7b7;">2. Saldo Disponível Hoje (Em Conta)</span>
-                <span class="exec-val" style="color:#6ee7b7;">R$ {d_foco['saldo_disponivel_hoje']:,.2f}</span>
+                <span class="exec-title" style="color:#6ee7b7;">💳 2. Saldo Disponível Hoje</span>
+                <span class="exec-val-large" style="color:#6ee7b7;">R$ {d_foco['saldo_disponivel_hoje']:,.2f}</span>
             </div>
             <div class="exec-box">
-                <span class="exec-title">3. Renda Total Família</span>
+                <span class="exec-title">💵 3. Renda Total Família</span>
                 <span class="exec-val" style="color:#34d399;">R$ {d_foco['renda_mes']:,.2f}</span>
             </div>
             <div class="exec-box">
-                <span class="exec-title">4. Saídas Totais (Geral)</span>
+                <span class="exec-title">💸 4. Saídas Totais</span>
                 <span class="exec-val" style="color:#f87171;">R$ {d_foco['saidas_mes']:,.2f}</span>
             </div>
             <div class="exec-box exec-box-reserva">
@@ -685,7 +735,7 @@ if modo_visao.startswith("⚡"):
                 <span class="exec-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
             <div class="exec-box {class_final}">
-                <span class="exec-title" style="color:#a5b4fc;">6. Saldo Corrente Previsto (Fim Mês)</span>
+                <span class="exec-title" style="color:#a5b4fc;">🏁 6. Saldo Previsto Fim Mês</span>
                 <span class="exec-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
             </div>
             <div class="exec-box">
@@ -706,7 +756,7 @@ if modo_visao.startswith("⚡"):
             </div>
             <div class="exec-box exec-box-patrimonio">
                 <span class="exec-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
-                <span class="exec-val" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
+                <span class="exec-val-large" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -716,7 +766,7 @@ if modo_visao.startswith("⚡"):
     col_rapido_p1, col_rapido_p2 = st.columns(2)
 
     with col_rapido_p1:
-        st.subheader(f"💳 Cartões — P1 (Lucas)")
+        st.markdown('<div class="section-header">💳 Faturas de Cartão — P1 (Lucas)</div>', unsafe_allow_html=True)
         cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
         
         with st.form(f"form_rapido_p1_{mes_atual}"):
@@ -726,14 +776,14 @@ if modo_visao.startswith("⚡"):
                 val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
                 valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{mes_atual}_{cartao}")
             
-            if st.form_submit_button(f"💾 Salvar P1 ({mes_atual})", type="primary", use_container_width=True):
+            if st.form_submit_button(f"💾 Salvar Faturas P1 ({mes_atual})", type="primary", use_container_width=True):
                 for cartao, val in valores_p1.items():
                     salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
                 st.success("Salvo com sucesso!")
                 st.rerun()
 
     with col_rapido_p2:
-        st.subheader(f"💳 Cartões — P2 (Marcella)")
+        st.markdown('<div class="section-header">💳 Faturas de Cartão — P2 (Marcella)</div>', unsafe_allow_html=True)
         cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
         
         with st.form(f"form_rapido_p2_{mes_atual}"):
@@ -743,7 +793,7 @@ if modo_visao.startswith("⚡"):
                 val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
                 valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{mes_atual}_{cartao}")
             
-            if st.form_submit_button(f"💾 Salvar P2 ({mes_atual})", type="primary", use_container_width=True):
+            if st.form_submit_button(f"💾 Salvar Faturas P2 ({mes_atual})", type="primary", use_container_width=True):
                 for cartao, val in valores_p2.items():
                     salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
                 st.success("Salvo com sucesso!")
@@ -751,22 +801,22 @@ if modo_visao.startswith("⚡"):
 
     st.divider()
 
-    with st.expander(f"➕ **Adicionar Gasto Rápido em {mes_atual} (PIX / Dinheiro)**", expanded=False):
+    with st.expander(f"➕ **Registrar Novo Gasto Esporádico (PIX / Dinheiro) em {mes_atual}**", expanded=False):
         with st.form(f"form_gasto_rapido_fast_{mes_atual}", clear_on_submit=True):
             c_f1, c_f2 = st.columns(2)
             with c_f1:
-                desc = st.text_input("Descrição", placeholder="ex: Feira, Farmácia")
+                desc = st.text_input("Descrição", placeholder="ex: Mercado, Feira, Farmácia")
                 val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
             with c_f2:
                 pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
                 cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
                 
-            if st.form_submit_button("💾 Registrar Gasto", type="primary", use_container_width=True):
+            if st.form_submit_button("💾 Confirmar e Debitar do Saldo", type="primary", use_container_width=True):
                 if not desc.strip():
-                    st.error("Preencha a descrição.")
+                    st.error("Preencha a descrição do gasto.")
                 else:
                     inserir_gasto_rapido(mes_atual, pessoa, desc, cat, val)
-                    st.success("Registrado com sucesso!")
+                    st.success("Gasto inserido e saldo atualizado!")
                     st.rerun()
 
 # ====================================================================
@@ -786,7 +836,7 @@ else:
                 <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
             <div class="exec-box {class_disp}">
-                <span class="exec-title" style="color:#6ee7b7;">2. Saldo Disponível Hoje (Em Conta)</span>
+                <span class="exec-title" style="color:#6ee7b7;">2. Saldo Disponível Hoje</span>
                 <span class="exec-val" style="color:#6ee7b7;">R$ {d_foco['saldo_disponivel_hoje']:,.2f}</span>
             </div>
             <div class="exec-box">
@@ -1064,7 +1114,6 @@ else:
 
         st.divider()
         
-        # Gráfico Sintético de Evolução do Patrimônio Familiar
         st.subheader("📈 Curva de Crescimento do Patrimônio Familiar")
         df_chart = pd.DataFrame(dados_grafico).set_index("Mês")
         st.line_chart(df_chart, use_container_width=True)
