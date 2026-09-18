@@ -11,10 +11,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado Otimizado (Correção de Títulos Cortados)
+# 2. CSS Customizado Otimizado (Sem Cortes de Texto e Layout Responsivo)
 st.markdown("""
     <style>
-        /* Ajuste de respiro do topo para evitar corte do título */
+        /* Ajuste de respiro do topo para evitar corte dos títulos */
         .block-container {
             padding-top: 2.2rem !important;
             padding-bottom: 0.8rem !important;
@@ -404,7 +404,7 @@ def get_programado_cartao(pessoa):
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# Funções de Escrita em Banco
+# Funções de Escrita em Banco Corrigidas
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -483,7 +483,6 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
-
 
 def arquivar_mes_manual(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
