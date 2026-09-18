@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado Otimizado
+# 2. CSS Otimizado para Mobile e Desktop
 st.markdown("""
     <style>
         .block-container {
@@ -47,7 +47,6 @@ st.markdown("""
             justify-content: center;
         }
         
-        .exec-box-disponivel { background: #064e3b; border: 1px solid #059669; }
         .exec-box-reserva { background: #0c2340; border: 1px solid #0284c7; }
         .exec-box-final { background: #1e1b4b; border: 1px solid #6366f1; }
         .exec-box-patrimonio { background: #422006; border: 1px solid #d97706; grid-column: span 2; }
@@ -294,6 +293,8 @@ def get_fixos_no_mes(pessoa, mes_tela):
         return pd.DataFrame(columns=['item', 'valor'])
     
     df_p = df_fixos_all[df_fixos_all['pessoa'] == pessoa].copy()
+    
+    # Migração transparente: se o registro legado não tinha mes_ano (NULL), atribui uma data base inicial
     df_p['mes_ano'] = df_p['mes_ano'].fillna("08.2026").astype(str)
     
     df_mes = df_p[df_p['mes_ano'] == mes_b]
@@ -305,6 +306,7 @@ def get_fixos_no_mes(pessoa, mes_tela):
         ultimo_m = max(meses_anteriores)
         return df_p[df_p['mes_ano'] == ultimo_m][['item', 'valor']]
     
+    # Se não achar nenhuma data anterior, pega os dados legados como padrão
     return df_p[['item', 'valor']]
 
 def get_comuns_no_mes(mes_tela):
@@ -313,6 +315,8 @@ def get_comuns_no_mes(mes_tela):
         return pd.DataFrame(columns=['item', 'valor', 'pagador'])
     
     df_c = df_comuns_all.copy()
+    
+    # Migração transparente: se o registro legado não tinha mes_ano (NULL), atribui uma data base inicial
     df_c['mes_ano'] = df_c['mes_ano'].fillna("08.2026").astype(str)
     
     df_mes = df_c[df_c['mes_ano'] == mes_b]
@@ -324,6 +328,7 @@ def get_comuns_no_mes(mes_tela):
         ultimo_m = max(meses_anteriores)
         return df_c[df_c['mes_ano'] == ultimo_m][['item', 'valor', 'pagador']]
         
+    # Se não achar nenhuma data anterior, recupera o cadastro legado
     return df_c[['item', 'valor', 'pagador']]
 
 def get_programado_cartao(pessoa):
@@ -407,6 +412,7 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
 
+# Ação Direta Manual: Fechar e Arquivar o Mês
 def arquivar_mes_manual(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -421,6 +427,7 @@ def arquivar_mes_manual(mes_tela):
     salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
 
+# Ação Direta Manual: Reabrir Mês
 def reabrir_mes_manual(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -481,7 +488,7 @@ def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
-# Motor de Cálculo Financeiro Ajustado com a Visão Dupla de Saldo
+# Cálculo Financeiro
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
@@ -544,22 +551,15 @@ def calcular_sequencia_financeira():
         saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
-        # Visão Dupla de Saldo:
-        saldo_herdeiro_abertura = saldo_acumulado_anterior
-        saldo_disponivel_hoje = saldo_herdeiro_abertura - pontual_mes
-        
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
         patrimonio_total_final = saldo_conta_final + caixinha_acumulada_geral
 
         dados_meses[m_t] = {
-            "saldo_anterior": saldo_herdeiro_abertura,
-            "saldo_disponivel_hoje": saldo_disponivel_hoje,
-            "renda_mes": renda_mes, "renda_p1": r_p1, "renda_p2": r_p2,
-            "gasto_p1": gasto_exclusivo_p1, "gasto_p2": gasto_exclusivo_p2,
-            "saidas_mes": saidas_mes, "caixinha_mes": caixinha_mes,
-            "caixinha_acumulada": caixinha_acumulada_geral,
-            "sobra_mes_isolada": sobra_do_mes_bruta,
-            "saldo_acumulado_final": saldo_conta_final,
+            "saldo_anterior": saldo_acumulado_anterior, "renda_mes": renda_mes,
+            "renda_p1": r_p1, "renda_p2": r_p2, "gasto_p1": gasto_exclusivo_p1,
+            "gasto_p2": gasto_exclusivo_p2, "saidas_mes": saidas_mes,
+            "caixinha_mes": caixinha_mes, "caixinha_acumulada": caixinha_acumulada_geral,
+            "sobra_mes_isolada": sobra_do_mes_bruta, "saldo_acumulado_final": saldo_conta_final,
             "patrimonio_total_final": patrimonio_total_final
         }
         saldo_acumulado_anterior = saldo_conta_final
@@ -605,7 +605,7 @@ meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
 st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros.get(mes_atual, {
-    "saldo_anterior": 0.0, "saldo_disponivel_hoje": 0.0, "renda_mes": 0.0, "renda_p1": 0.0, "renda_p2": 0.0,
+    "saldo_anterior": 0.0, "renda_mes": 0.0, "renda_p1": 0.0, "renda_p2": 0.0,
     "gasto_p1": 0.0, "gasto_p2": 0.0, "saidas_mes": 0.0, "caixinha_mes": 0.0,
     "caixinha_acumulada": 0.0, "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0,
     "patrimonio_total_final": 0.0
@@ -624,27 +624,23 @@ if modo_visao.startswith("⚡"):
     st.markdown(f"""
         <div class="exec-grid">
             <div class="exec-box">
-                <span class="exec-title">1. Saldo Inicial (Abertura Mês)</span>
+                <span class="exec-title">1. Saldo Inicial Conta</span>
                 <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="exec-box exec-box-disponivel">
-                <span class="exec-title" style="color:#6ee7b7;">2. Saldo Disponível Hoje (Em Conta)</span>
-                <span class="exec-val" style="color:#6ee7b7;">R$ {d_foco['saldo_disponivel_hoje']:,.2f}</span>
-            </div>
             <div class="exec-box">
-                <span class="exec-title">3. Renda Total Família</span>
+                <span class="exec-title">2. Renda Total Família</span>
                 <span class="exec-val" style="color:#34d399;">R$ {d_foco['renda_mes']:,.2f}</span>
             </div>
             <div class="exec-box">
-                <span class="exec-title">4. Saídas Totais (Geral)</span>
+                <span class="exec-title">3. Saídas Totais (Geral)</span>
                 <span class="exec-val" style="color:#f87171;">R$ {d_foco['saidas_mes']:,.2f}</span>
             </div>
             <div class="exec-box exec-box-reserva">
-                <span class="exec-title" style="color:#38bdf8;">🔒 5. Caixinha Guardada</span>
+                <span class="exec-title" style="color:#38bdf8;">🔒 4. Caixinha Guardada</span>
                 <span class="exec-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
             <div class="exec-box exec-box-final">
-                <span class="exec-title" style="color:#a5b4fc;">6. Saldo Corrente Previsto (Fim Mês)</span>
+                <span class="exec-title" style="color:#a5b4fc;">5. Saldo Corrente Conta</span>
                 <span class="exec-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
             </div>
             <div class="exec-box">
@@ -741,27 +737,23 @@ else:
     st.markdown(f"""
         <div class="exec-grid">
             <div class="exec-box">
-                <span class="exec-title">1. Saldo Inicial (Abertura Mês)</span>
+                <span class="exec-title">1. Saldo Inicial Conta</span>
                 <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="exec-box exec-box-disponivel">
-                <span class="exec-title" style="color:#6ee7b7;">2. Saldo Disponível Hoje (Em Conta)</span>
-                <span class="exec-val" style="color:#6ee7b7;">R$ {d_foco['saldo_disponivel_hoje']:,.2f}</span>
-            </div>
             <div class="exec-box">
-                <span class="exec-title">3. Renda Total Família</span>
+                <span class="exec-title">2. Renda Total Família</span>
                 <span class="exec-val" style="color:#34d399;">R$ {d_foco['renda_mes']:,.2f}</span>
             </div>
             <div class="exec-box">
-                <span class="exec-title">4. Saídas Totais (Geral)</span>
+                <span class="exec-title">3. Saídas Totais (Geral)</span>
                 <span class="exec-val" style="color:#f87171;">R$ {d_foco['saidas_mes']:,.2f}</span>
             </div>
             <div class="exec-box exec-box-reserva">
-                <span class="exec-title" style="color:#38bdf8;">🔒 5. Caixinha Guardada</span>
+                <span class="exec-title" style="color:#38bdf8;">🔒 4. Caixinha Guardada</span>
                 <span class="exec-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
             </div>
             <div class="exec-box exec-box-final">
-                <span class="exec-title" style="color:#a5b4fc;">6. Saldo Corrente Previsto (Fim Mês)</span>
+                <span class="exec-title" style="color:#a5b4fc;">5. Saldo Corrente Conta</span>
                 <span class="exec-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
             </div>
             <div class="exec-box">
@@ -909,6 +901,7 @@ else:
     with tab_consolidado:
         st.header("🏠 Visão Consolidada, Caixinha & Totais")
         
+        # Painel de Controle de Encerramento e Congelamento do Mês
         st.subheader(f"🔒 Encerramento e Congelamento do Mês — **{mes_atual}**")
         mes_b_atual = mes_tela_para_banco(mes_atual)
         st_match = df_status_all[df_status_all['mes_ano'] == mes_b_atual] if not df_status_all.empty else pd.DataFrame()
@@ -979,24 +972,22 @@ else:
 
         st.subheader("📅 Projeção Evolutiva Mês a Mês & Saldo de Caixa Acumulado")
         
-        row_sal_ini = {"Métrica": "1. Saldo Inicial (Abertura Mês)"}
-        row_sal_disp = {"Métrica": "2. Saldo Disponível Hoje (Em Conta)"}
-        row_rec = {"Métrica": "3. Renda Total Família"}
-        row_desp = {"Métrica": "4. Saídas Totais (Cartão + Fixos + PIX)"}
-        row_caixinha = {"Métrica": "5. Aporte Caixinha (Mês)"}
-        row_sobra_mes = {"Métrica": "6. Sobra Líquida Isolada do Mês"}
-        row_sal_fim = {"Métrica": "7. Saldo Final Previsto (Fim Mês)"}
-        row_reserva_acum = {"Métrica": "8. Caixinha Acumulada (Reserva)"}
-        row_patrimonio = {"Métrica": "9. Patrimônio Total Geral"}
+        row_sal_ini = {"Métrica": "1. Saldo Inicial em Conta"}
+        row_rec = {"Métrica": "2. Renda Total Família"}
+        row_desp = {"Métrica": "3. Saídas Totais (Cartão + Fixos + PIX)"}
+        row_caixinha = {"Métrica": "4. Aporte Caixinha (Mês)"}
+        row_sobra_mes = {"Métrica": "5. Sobra Líquida Isolada do Mês"}
+        row_sal_fim = {"Métrica": "6. Saldo Final Conta (Corrente - Disponível)"}
+        row_reserva_acum = {"Métrica": "7. Caixinha Acumulada (Reserva Separada)"}
+        row_patrimonio = {"Métrica": "8. Patrimônio Total Geral (Conta + Caixinha)"}
 
         for m_t in meses_visiveis:
             d = dados_financeiros.get(m_t, {
-                "saldo_anterior": 0.0, "saldo_disponivel_hoje": 0.0, "renda_mes": 0.0,
-                "saidas_mes": 0.0, "caixinha_mes": 0.0, "caixinha_acumulada": 0.0,
-                "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0, "patrimonio_total_final": 0.0
+                "saldo_anterior": 0.0, "renda_mes": 0.0, "saidas_mes": 0.0,
+                "caixinha_mes": 0.0, "caixinha_acumulada": 0.0, "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0,
+                "patrimonio_total_final": 0.0
             })
             row_sal_ini[m_t] = d["saldo_anterior"]
-            row_sal_disp[m_t] = d["saldo_disponivel_hoje"]
             row_rec[m_t] = d["renda_mes"]
             row_desp[m_t] = d["saidas_mes"] - d["caixinha_mes"]
             row_caixinha[m_t] = d["caixinha_mes"]
@@ -1006,11 +997,11 @@ else:
             row_patrimonio[m_t] = d["patrimonio_total_final"]
 
         df_resumo = pd.DataFrame([
-            row_sal_ini, row_sal_disp, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
+            row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
         ])
         
         cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
-        st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=310)
+        st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=280)
 
     with tab_p1:
         renderizar_pessoa("Pessoa 1", "p1")
