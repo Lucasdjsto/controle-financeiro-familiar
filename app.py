@@ -11,14 +11,32 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado Otimizado (Correção dos Títulos Cortados e Novo Layout)
+# 2. CSS Customizado Otimizado (Correção de Títulos Cortados)
 st.markdown("""
     <style>
+        /* Ajuste de respiro do topo para evitar corte do título */
         .block-container {
-            padding-top: 0.5rem !important;
+            padding-top: 2.2rem !important;
             padding-bottom: 0.8rem !important;
-            padding-left: 0.4rem !important;
-            padding-right: 0.4rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        
+        /* Ajuste de fontes e altura de linha para H1, H2 e H3 do Streamlit */
+        h1 {
+            font-size: 1.5rem !important;
+            line-height: 1.3 !important;
+            padding-top: 0.2rem !important;
+            margin-bottom: 0.8rem !important;
+            word-wrap: break-word !important;
+        }
+        
+        h2, h3 {
+            font-size: 1.2rem !important;
+            line-height: 1.3 !important;
+            padding-top: 0.2rem !important;
+            margin-bottom: 0.5rem !important;
+            word-wrap: break-word !important;
         }
         
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
@@ -30,12 +48,12 @@ st.markdown("""
         }
         
         .section-header {
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             font-weight: 700;
             color: #9ca3af;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            margin: 12px 0 6px 0;
+            margin: 10px 0 6px 0;
             border-bottom: 1px solid #374151;
             padding-bottom: 2px;
         }
