@@ -446,14 +446,16 @@ def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
             m_b = mes_tela_para_banco(m_t)
             conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"), {"pessoa": pessoa, "mes": m_b})
             for _, row in df_editado.iterrows():
-                if str(row['item']).strip():
-                    query = '''
+                item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
+                if item_str:
+                    val = safe_float(row['valor'])
+                    query = text('''
                         INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor)
                         VALUES (:pessoa, :item, :mes, :val)
                         ON CONFLICT (pessoa, item, mes_ano)
-                        DO UPDATE SET valor = EXCLUDED.valor;
-                    '''
-                    conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "mes": m_b, "val": safe_float(row['valor'])})
+                        DO UPDATE SET valor = :val;
+                    ''')
+                    conn.execute(query, {"pessoa": pessoa, "item": item_str, "mes": m_b, "val": val})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
@@ -467,18 +469,21 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
             m_b = mes_tela_para_banco(m_t)
             conn.execute(text("DELETE FROM gastos_comuns WHERE mes_ano = :mes"), {"mes": m_b})
             for _, row in df_editado.iterrows():
-                if str(row['item']).strip():
+                item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
+                if item_str:
+                    val = safe_float(row['valor'])
                     pag = str(row.get('pagador', 'Dividido (50/50)'))
-                    query = '''
+                    query = text('''
                         INSERT INTO gastos_comuns (item, mes_ano, valor, pagador)
                         VALUES (:item, :mes, :val, :pag)
                         ON CONFLICT (item, mes_ano)
-                        DO UPDATE SET valor = EXCLUDED.valor, pagador = EXCLUDED.pagador;
-                    '''
-                    conn.execute(text(query), {"item": str(row['item']), "mes": m_b, "val": safe_float(row['valor']), "pag": pag})
+                        DO UPDATE SET valor = :val, pagador = :pag;
+                    ''')
+                    conn.execute(query, {"item": item_str, "mes": m_b, "val": val, "pag": pag})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
+
 
 def arquivar_mes_manual(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
