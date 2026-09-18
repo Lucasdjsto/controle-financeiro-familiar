@@ -1,5 +1,4 @@
 import os
-import io
 from datetime import datetime
 import streamlit as st
 import pandas as pd
@@ -12,25 +11,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado Ajustado para Não Cortar o Topo no Mobile
+# 2. CSS Customizado para Mobile e Desktop
 st.markdown("""
     <style>
-        /* Ajuste de margem superior para não encavalar na barra do Streamlit Cloud */
         .block-container {
-            padding-top: 2.8rem !important;
+            padding-top: 0.5rem !important;
             padding-bottom: 0.8rem !important;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            padding-left: 0.4rem !important;
+            padding-right: 0.4rem !important;
         }
         
-        /* Ajuste de tamanho dos títulos principais */
-        h1, h2, h3 {
-            font-size: 1.15rem !important;
-            margin-top: 0.2rem !important;
-            margin-bottom: 0.4rem !important;
-            line-height: 1.2 !important;
-        }
-
         [data-testid="stDataFrame"] div, [data-testid="stDataEditor"] div {
             font-size: 0.78rem !important;
         }
@@ -38,59 +28,61 @@ st.markdown("""
         .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
             padding: 2px 4px !important;
         }
-
-        /* TELA DE LOGIN */
-        .login-card {
-            background: #111827;
-            border: 1px solid #374151;
-            border-radius: 12px;
-            padding: 1.2rem;
-            max-width: 380px;
-            margin: 1.5rem auto;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-        }
-        .login-title {
-            font-size: 1.05rem !important;
+        
+        .section-header {
+            font-size: 0.78rem;
             font-weight: 700;
-            color: #f3f4f6;
-            text-align: center;
-            margin-bottom: 0.2rem;
-        }
-        .login-subtitle {
-            font-size: 0.75rem !important;
             color: #9ca3af;
-            text-align: center;
-            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 12px 0 6px 0;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 2px;
         }
         
-        /* DASHBOARD EXEC GRID */
-        .exec-grid {
+        .grid-sec1 {
+            display: grid;
+            grid-template-columns: repeat(1, 1fr);
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .grid-sec2 {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            width: 100%;
-            margin-bottom: 0.8rem;
+            gap: 6px;
+            margin-bottom: 10px;
         }
         
-        .exec-box {
-            background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+        .grid-sec3 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .card-base {
+            background: #111827;
             border: 1px solid #374151;
-            border-radius: 10px;
-            padding: 10px 12px;
+            border-radius: 8px;
+            padding: 8px 12px;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
         
-        .exec-box-disponivel { background: linear-gradient(135deg, #064e3b 0%, #047857 100%); border: 1px solid #10b981; }
-        .exec-box-reserva { background: linear-gradient(135deg, #0c2340 0%, #0369a1 100%); border: 1px solid #0284c7; }
-        .exec-box-final { background: linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%); border: 1px solid #6366f1; }
-        .exec-box-patrimonio { background: linear-gradient(135deg, #422006 0%, #b45309 100%); border: 1px solid #f59e0b; grid-column: span 2; }
-        .exec-box-alerta { background: linear-gradient(135deg, #450a0a 0%, #991b1b 100%) !important; border: 1px solid #ef4444 !important; }
+        .card-proximo-mes {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+            border: 1px solid #6366f1;
+            grid-column: span 1;
+        }
         
-        .exec-title { font-size: 0.65rem; color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
-        .exec-val { font-size: 0.92rem; font-weight: 700; color: #f3f4f6; }
-        .exec-val-large { font-size: 1.15rem; font-weight: 800; color: #ffffff; }
+        .card-reserva { background: #0c2340; border: 1px solid #0284c7; }
+        .card-patrimonio { background: #422006; border: 1px solid #d97706; }
+        
+        .card-title { font-size: 0.65rem; color: #9ca3af; font-weight: bold; }
+        .card-subtitle { font-size: 0.58rem; color: #c7d2fe; font-style: italic; margin-top: -2px; margin-bottom: 2px; }
+        .card-val { font-size: 0.95rem; font-weight: 800; color: #f3f4f6; }
 
         .stTabs [data-baseweb="tab-list"] {
             gap: 4px;
@@ -114,27 +106,16 @@ st.markdown("""
         }
 
         .stButton > button {
-            border-radius: 6px;
+            border-radius: 5px;
             font-weight: 600;
-            padding: 4px 10px;
+            padding: 3px 8px;
             font-size: 0.78rem;
         }
 
-        .section-header {
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #9ca3af;
-            text-transform: uppercase;
-            margin: 0.6rem 0 0.3rem 0;
-            letter-spacing: 0.5px;
-        }
-
         @media (min-width: 768px) {
-            .block-container {
-                padding-top: 3.2rem !important;
-            }
-            .exec-grid { grid-template-columns: repeat(4, 1fr); }
-            .exec-box-patrimonio { grid-column: span 4; }
+            .grid-sec1 { grid-template-columns: repeat(3, 1fr); }
+            .grid-sec2 { grid-template-columns: repeat(3, 1fr); }
+            .grid-sec3 { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 """, unsafe_allow_html=True)
@@ -177,33 +158,25 @@ def verificar_senha():
     if st.session_state["autenticado"]:
         return True
 
-    col1, col2, col3 = st.columns([1, 2, 1])
+    st.title("🔒 Acesso Restrito - Gestão Financeira")
     
-    with col2:
-        st.markdown("""
-            <div class="login-card">
-                <div class="login-title">🔐 Controle Financeiro</div>
-                <div class="login-subtitle">Acesso restrito ao painel da família</div>
-            </div>
-        """, unsafe_allow_html=True)
+    with st.form("form_login"):
+        senha_digitada = st.text_input("Digite a senha de acesso:", type="password")
+        botao_entrar = st.form_submit_button("Entrar")
         
-        with st.form("form_login"):
-            senha_digitada = st.text_input("Senha de acesso:", type="password", placeholder="Digite sua senha")
-            botao_entrar = st.form_submit_button("Entrar no Sistema", use_container_width=True, type="primary")
-            
-            if botao_entrar:
-                if senha_digitada == "pretabebe":
-                    st.session_state["autenticado"] = True
-                    st.success("Acesso liberado!")
-                    st.rerun()
-                else:
-                    st.error("Senha incorreta!")
+        if botao_entrar:
+            if senha_digitada == "pretabebe":
+                st.session_state["autenticado"] = True
+                st.success("Acesso liberado!")
+                st.rerun()
+            else:
+                st.error("Senha incorreta!")
     return False
 
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão Otimizada com Supabase
+# 4. Conexão com Supabase
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -215,8 +188,8 @@ def get_db_engine():
     
     return create_engine(
         db_url,
-        pool_size=3,
-        max_overflow=5,
+        pool_size=2,
+        max_overflow=3,
         pool_recycle=60,
         pool_pre_ping=True,
         connect_args={"connect_timeout": 5}
@@ -362,7 +335,7 @@ def get_fixos_no_mes(pessoa, mes_tela):
         ultimo_m = max(meses_anteriores)
         return df_p[df_p['mes_ano'] == ultimo_m][['item', 'valor']]
     
-    return df_p[['item', 'valor']]
+    return df_p[['item', 'valor']] if not df_p.empty else pd.DataFrame(columns=['item', 'valor'])
 
 def get_comuns_no_mes(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
@@ -381,48 +354,43 @@ def get_comuns_no_mes(mes_tela):
         ultimo_m = max(meses_anteriores)
         return df_c[df_c['mes_ano'] == ultimo_m][['item', 'valor', 'pagador']]
         
-    return df_c[['item', 'valor', 'pagador']]
+    return df_c[['item', 'valor', 'pagador']] if not df_c.empty else pd.DataFrame(columns=['item', 'valor', 'pagador'])
 
 def get_programado_cartao(pessoa):
     if df_prog_all.empty:
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# Escritas em Lote
+# Funções de Escrita em Banco
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
-        query = text('''
+        query = '''
             INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
             VALUES (:pessoa, :tipo, :item, :mes, :val)
             ON CONFLICT (pessoa, tipo, item, mes_ano) 
             DO UPDATE SET valor = EXCLUDED.valor;
-        ''')
-        conn.execute(query, {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": safe_float(valor)})
+        '''
+        conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": safe_float(valor)})
     salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
 
 def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
-    payload = []
-    for _, row in df_editado.iterrows():
-        item = str(row['Item'])
-        if "Total" in item:
-            continue
-        for mes_t in meses_visiveis:
-            mes_b = mes_tela_para_banco(mes_t)
-            val = safe_float(row[mes_t])
-            payload.append({"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": val})
-            
-    if payload:
-        with engine.begin() as conn:
-            query = text('''
-                INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
-                VALUES (:pessoa, :tipo, :item, :mes, :val)
-                ON CONFLICT (pessoa, tipo, item, mes_ano) 
-                DO UPDATE SET valor = EXCLUDED.valor;
-            ''')
-            conn.execute(query, payload)
-            
+    with engine.begin() as conn:
+        for _, row in df_editado.iterrows():
+            item = str(row['Item'])
+            if "Total" in item:
+                continue
+            for mes_t in meses_visiveis:
+                mes_b = mes_tela_para_banco(mes_t)
+                val = safe_float(row[mes_t])
+                query = '''
+                    INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
+                    VALUES (:pessoa, :tipo, :item, :mes, :val)
+                    ON CONFLICT (pessoa, tipo, item, mes_ano) 
+                    DO UPDATE SET valor = EXCLUDED.valor;
+                '''
+                conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": val})
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
@@ -430,23 +398,19 @@ def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
     idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
     meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
     
-    payload = []
     with engine.begin() as conn:
         for m_t in meses_afetados_tela:
             m_b = mes_tela_para_banco(m_t)
             conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"), {"pessoa": pessoa, "mes": m_b})
             for _, row in df_editado.iterrows():
                 if str(row['item']).strip():
-                    payload.append({"pessoa": pessoa, "item": str(row['item']), "mes": m_b, "val": safe_float(row['valor'])})
-        
-        if payload:
-            query = text('''
-                INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor)
-                VALUES (:pessoa, :item, :mes, :val)
-                ON CONFLICT (pessoa, item, mes_ano)
-                DO UPDATE SET valor = EXCLUDED.valor;
-            ''')
-            conn.execute(query, payload)
+                    query = '''
+                        INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor)
+                        VALUES (:pessoa, :item, :mes, :val)
+                        ON CONFLICT (pessoa, item, mes_ano)
+                        DO UPDATE SET valor = EXCLUDED.valor;
+                    '''
+                    conn.execute(text(query), {"pessoa": pessoa, "item": str(row['item']), "mes": m_b, "val": safe_float(row['valor'])})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
@@ -455,7 +419,6 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
     idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
     meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
     
-    payload = []
     with engine.begin() as conn:
         for m_t in meses_afetados_tela:
             m_b = mes_tela_para_banco(m_t)
@@ -463,16 +426,13 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
             for _, row in df_editado.iterrows():
                 if str(row['item']).strip():
                     pag = str(row.get('pagador', 'Dividido (50/50)'))
-                    payload.append({"item": str(row['item']), "mes": m_b, "val": safe_float(row['valor']), "pag": pag})
-        
-        if payload:
-            query = text('''
-                INSERT INTO gastos_comuns (item, mes_ano, valor, pagador)
-                VALUES (:item, :mes, :val, :pag)
-                ON CONFLICT (item, mes_ano)
-                DO UPDATE SET valor = EXCLUDED.valor, pagador = EXCLUDED.pagador;
-            ''')
-            conn.execute(query, payload)
+                    query = '''
+                        INSERT INTO gastos_comuns (item, mes_ano, valor, pagador)
+                        VALUES (:item, :mes, :val, :pag)
+                        ON CONFLICT (item, mes_ano)
+                        DO UPDATE SET valor = EXCLUDED.valor, pagador = EXCLUDED.pagador;
+                    '''
+                    conn.execute(text(query), {"item": str(row['item']), "mes": m_b, "val": safe_float(row['valor']), "pag": pag})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
@@ -506,11 +466,11 @@ def resetar_todos_status_faturas():
 def inserir_gasto_rapido(mes_tela, pessoa, descricao, categoria, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
-        query = text('''
+        query = '''
             INSERT INTO pontuais_dinheiro (mes_ano, pessoa, descricao, categoria, valor)
             VALUES (:mes_ano, :pessoa, :descricao, :categoria, :valor)
-        ''')
-        conn.execute(query, {
+        '''
+        conn.execute(text(query), {
             "mes_ano": mes_b, "pessoa": pessoa, "descricao": descricao,
             "categoria": categoria, "valor": safe_float(valor)
         })
@@ -523,28 +483,22 @@ def deletar_gasto_pontual(gasto_id):
     st.cache_data.clear()
 
 def salvar_caixinha(df_editado, mes_atual_foco):
-    payload = []
-    for _, row in df_editado.iterrows():
-        mes_t = row['Mês']
-        mes_b = mes_tela_para_banco(mes_t)
-        val = safe_float(row['Aporte do Mês (R$)'])
-        payload.append({"mes": mes_b, "val": val})
-        
-    if payload:
-        with engine.begin() as conn:
-            query = text('''
+    with engine.begin() as conn:
+        for _, row in df_editado.iterrows():
+            mes_t = row['Mês']
+            mes_b = mes_tela_para_banco(mes_t)
+            val = safe_float(row['Aporte do Mês (R$)'])
+            query = '''
                 INSERT INTO caixinha (mes_ano, valor)
                 VALUES (:mes, :val)
                 ON CONFLICT (mes_ano)
                 DO UPDATE SET valor = EXCLUDED.valor;
-            ''')
-            conn.execute(query, payload)
-            
+            '''
+            conn.execute(text(query), {"mes": mes_b, "val": val})
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
 def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
-    payload = []
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM programado_cartao WHERE pessoa = :pessoa"), {"pessoa": pessoa})
         for _, row in df_editado.iterrows():
@@ -552,16 +506,12 @@ def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
                 cartao_val = str(row['cartao']) if pd.notnull(row.get('cartao')) else ESTRUTURA_CARTÕES_BASE[pessoa][0]
                 desc_val = str(row['descricao'])
                 val_val = safe_float(row.get('valor'))
-                payload.append({"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
-                
-        if payload:
-            query = text("INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)")
-            conn.execute(query, payload)
-            
+                query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
+                conn.execute(text(query), {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
-# Motor de Cálculo Financeiro
+# Cálculo Financeiro
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
@@ -624,21 +574,15 @@ def calcular_sequencia_financeira():
         saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
-        saldo_herdeiro_abertura = saldo_acumulado_anterior
-        saldo_disponivel_hoje = saldo_herdeiro_abertura - pontual_mes
-        
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
         patrimonio_total_final = saldo_conta_final + caixinha_acumulada_geral
 
         dados_meses[m_t] = {
-            "saldo_anterior": saldo_herdeiro_abertura,
-            "saldo_disponivel_hoje": saldo_disponivel_hoje,
-            "renda_mes": renda_mes, "renda_p1": r_p1, "renda_p2": r_p2,
-            "gasto_p1": gasto_exclusivo_p1, "gasto_p2": gasto_exclusivo_p2,
-            "saidas_mes": saidas_mes, "caixinha_mes": caixinha_mes,
-            "caixinha_acumulada": caixinha_acumulada_geral,
-            "sobra_mes_isolada": sobra_do_mes_bruta,
-            "saldo_acumulado_final": saldo_conta_final,
+            "saldo_anterior": saldo_acumulado_anterior, "renda_mes": renda_mes,
+            "renda_p1": r_p1, "renda_p2": r_p2, "gasto_p1": gasto_exclusivo_p1,
+            "gasto_p2": gasto_exclusivo_p2, "saidas_mes": saidas_mes,
+            "caixinha_mes": caixinha_mes, "caixinha_acumulada": caixinha_acumulada_geral,
+            "sobra_mes_isolada": sobra_do_mes_bruta, "saldo_acumulado_final": saldo_conta_final,
             "patrimonio_total_final": patrimonio_total_final
         }
         saldo_acumulado_anterior = saldo_conta_final
@@ -674,17 +618,6 @@ with st.sidebar:
         modo_exibicao = "6 Meses"
 
     st.divider()
-    
-    if st.download_button(
-        label="📥 Exportar Projeções (CSV)",
-        data=pd.DataFrame(dados_financeiros).T.to_csv(index_label="Mês").encode("utf-8"),
-        file_name=f"relatorio_financeiro_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    ):
-        st.info("Download do relatório iniciado!")
-
-    st.divider()
     if st.button("🚪 Sair do Sistema", use_container_width=True):
         st.session_state["autenticado"] = False
         st.rerun()
@@ -695,80 +628,95 @@ meses_visiveis = TODOS_MESES_TELA[idx_foco:idx_foco + qtd_meses]
 st.session_state["meses_v"] = meses_visiveis
 
 d_foco = dados_financeiros.get(mes_atual, {
-    "saldo_anterior": 0.0, "saldo_disponivel_hoje": 0.0, "renda_mes": 0.0, "renda_p1": 0.0, "renda_p2": 0.0,
+    "saldo_anterior": 0.0, "renda_mes": 0.0, "renda_p1": 0.0, "renda_p2": 0.0,
     "gasto_p1": 0.0, "gasto_p2": 0.0, "saidas_mes": 0.0, "caixinha_mes": 0.0,
     "caixinha_acumulada": 0.0, "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0,
     "patrimonio_total_final": 0.0
 })
 
-class_disp = "exec-box-alerta" if d_foco['saldo_disponivel_hoje'] < 0 else "exec-box-disponivel"
-class_final = "exec-box-alerta" if d_foco['saldo_acumulado_final'] < 0 else "exec-box-final"
-
-# ====================================================================
-# SEÇÃO 1: MODO RÁPIDO (REVISITADO VISUALMENTE)
-# ====================================================================
-if modo_visao.startswith("⚡"):
-    st.markdown(f"### ⚡ Painel Diário Rápido — **{mes_atual}**")
-
-    s_final = d_foco['saldo_acumulado_final']
-    caixinha_acum = d_foco['caixinha_acumulada']
-    patrimonio_final = d_foco['patrimonio_total_final']
-
+def renderizar_painel_indicadores():
+    st.markdown('<div class="section-header">⚡ 1. Situação Rápida da Conta Corrente</div>', unsafe_allow_html=True)
     st.markdown(f"""
-        <div class="exec-grid">
-            <div class="exec-box">
-                <span class="exec-title">🏦 1. Saldo Inicial Abertura</span>
-                <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
+        <div class="grid-sec1">
+            <div class="card-base">
+                <span class="card-title">🏦 1. Saldo Inicial (Abertura do Mês)</span>
+                <span class="card-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
             </div>
-            <div class="exec-box {class_disp}">
-                <span class="exec-title" style="color:#6ee7b7;">💳 2. Saldo Disponível Hoje</span>
-                <span class="exec-val-large" style="color:#6ee7b7;">R$ {d_foco['saldo_disponivel_hoje']:,.2f}</span>
+            <div class="card-base">
+                <span class="card-title">💳 2. Saldo Disponível Hoje</span>
+                <span class="card-val" style="color:#60a5fa;">R$ {d_foco['saldo_acumulado_final']:,.2f}</span>
             </div>
-            <div class="exec-box">
-                <span class="exec-title">💵 3. Renda Total Família</span>
-                <span class="exec-val" style="color:#34d399;">R$ {d_foco['renda_mes']:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">💸 4. Saídas Totais</span>
-                <span class="exec-val" style="color:#f87171;">R$ {d_foco['saidas_mes']:,.2f}</span>
-            </div>
-            <div class="exec-box exec-box-reserva">
-                <span class="exec-title" style="color:#38bdf8;">🔒 5. Caixinha Guardada</span>
-                <span class="exec-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
-            </div>
-            <div class="exec-box {class_final}">
-                <span class="exec-title" style="color:#a5b4fc;">🏁 6. Saldo Previsto Fim Mês</span>
-                <span class="exec-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">👤 P1 (Lucas) Renda</span>
-                <span class="exec-val" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">👤 P1 (Lucas) Gastos</span>
-                <span class="exec-val" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">👤 P2 (Marcella) Renda</span>
-                <span class="exec-val" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">👤 P2 (Marcella) Gastos</span>
-                <span class="exec-val" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
-            </div>
-            <div class="exec-box exec-box-patrimonio">
-                <span class="exec-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
-                <span class="exec-val-large" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
+            <div class="card-base card-proximo-mes">
+                <span class="card-title" style="color:#a5b4fc;">🏁 3. Saldo Previsto Fim do Mês</span>
+                <span class="card-subtitle">➡️ (Saldo Inicial de Entrada do Próximo Mês após pagar as contas)</span>
+                <span class="card-val" style="color:#ffffff;">R$ {d_foco['saldo_acumulado_final']:,.2f}</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-header">📊 2. Entradas e Saídas do Mês</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+        <div class="grid-sec2">
+            <div class="card-base">
+                <span class="card-title">💵 Renda Total Família</span>
+                <span class="card-val" style="color:#34d399;">+ R$ {d_foco['renda_mes']:,.2f}</span>
+            </div>
+            <div class="card-base">
+                <span class="card-title">💸 Saídas Totais (Despesas Geral)</span>
+                <span class="card-val" style="color:#f87171;">- R$ {d_foco['saidas_mes']:,.2f}</span>
+            </div>
+            <div class="card-base" style="background:#0f172a;">
+                <span class="card-title">⚖️ Sobra Líquida Isolada</span>
+                <span class="card-val" style="color:#e2e8f0;">R$ {d_foco['sobra_mes_isolada']:,.2f}</span>
+            </div>
+            <div class="card-base">
+                <span class="card-title">👤 P1 (Lucas) — Salário / Renda</span>
+                <span class="card-val" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
+            </div>
+            <div class="card-base">
+                <span class="card-title">👤 P1 (Lucas) — Gastos Totais</span>
+                <span class="card-val" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
+            </div>
+            <div class="card-base" style="border:none; background:transparent;"></div>
+            <div class="card-base">
+                <span class="card-title">👤 P2 (Marcella) — Salário / Renda</span>
+                <span class="card-val" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
+            </div>
+            <div class="card-base">
+                <span class="card-title">👤 P2 (Marcella) — Gastos Totais</span>
+                <span class="card-val" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="section-header">🔒 3. Reservas & Patrimônio Geral</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+        <div class="grid-sec3">
+            <div class="card-base card-reserva">
+                <span class="card-title" style="color:#38bdf8;">🔒 Caixinha Guardada (Reserva)</span>
+                <span class="card-val" style="color:#38bdf8;">R$ {d_foco['caixinha_acumulada']:,.2f}</span>
+            </div>
+            <div class="card-base card-patrimonio">
+                <span class="card-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
+                <span class="card-val" style="color:#fbbf24;">R$ {d_foco['patrimonio_total_final']:,.2f}</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+# ====================================================================
+# SEÇÃO 1: MODO RÁPIDO
+# ====================================================================
+if modo_visao.startswith("⚡"):
+    st.markdown(f"### ⚡ Painel Diário Rápido — **{mes_atual}**")
+    
+    renderizar_painel_indicadores()
 
     st.divider()
 
     col_rapido_p1, col_rapido_p2 = st.columns(2)
 
     with col_rapido_p1:
-        st.markdown('<div class="section-header">💳 Faturas de Cartão — P1 (Lucas)</div>', unsafe_allow_html=True)
+        st.subheader(f"💳 Cartões — P1 (Lucas)")
         cartoes_p1 = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
         
         with st.form(f"form_rapido_p1_{mes_atual}"):
@@ -778,14 +726,14 @@ if modo_visao.startswith("⚡"):
                 val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
                 valores_p1[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p1_{mes_atual}_{cartao}")
             
-            if st.form_submit_button(f"💾 Salvar Faturas P1 ({mes_atual})", type="primary", use_container_width=True):
+            if st.form_submit_button(f"💾 Salvar P1 ({mes_atual})", type="primary", use_container_width=True):
                 for cartao, val in valores_p1.items():
                     salvar_projecao_direta("Pessoa 1", "CARTAO", cartao, mes_atual, val)
                 st.success("Salvo com sucesso!")
                 st.rerun()
 
     with col_rapido_p2:
-        st.markdown('<div class="section-header">💳 Faturas de Cartão — P2 (Marcella)</div>', unsafe_allow_html=True)
+        st.subheader(f"💳 Cartões — P2 (Marcella)")
         cartoes_p2 = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
         
         with st.form(f"form_rapido_p2_{mes_atual}"):
@@ -795,7 +743,7 @@ if modo_visao.startswith("⚡"):
                 val_atual = safe_float(df_c[df_c['item'] == cartao]['valor'].iloc[0]) if not df_c[df_c['item'] == cartao].empty else 0.0
                 valores_p2[cartao] = st.number_input(f"{cartao} (R$)", value=val_atual, min_value=0.0, step=10.0, format="%.2f", key=f"fast_p2_{mes_atual}_{cartao}")
             
-            if st.form_submit_button(f"💾 Salvar Faturas P2 ({mes_atual})", type="primary", use_container_width=True):
+            if st.form_submit_button(f"💾 Salvar P2 ({mes_atual})", type="primary", use_container_width=True):
                 for cartao, val in valores_p2.items():
                     salvar_projecao_direta("Pessoa 2", "CARTAO", cartao, mes_atual, val)
                 st.success("Salvo com sucesso!")
@@ -803,22 +751,22 @@ if modo_visao.startswith("⚡"):
 
     st.divider()
 
-    with st.expander(f"➕ **Registrar Novo Gasto Esporádico (PIX / Dinheiro) em {mes_atual}**", expanded=False):
+    with st.expander(f"➕ **Adicionar Gasto Rápido em {mes_atual} (PIX / Dinheiro)**", expanded=False):
         with st.form(f"form_gasto_rapido_fast_{mes_atual}", clear_on_submit=True):
             c_f1, c_f2 = st.columns(2)
             with c_f1:
-                desc = st.text_input("Descrição", placeholder="ex: Mercado, Feira, Farmácia")
+                desc = st.text_input("Descrição", placeholder="ex: Feira, Farmácia")
                 val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
             with c_f2:
                 pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
                 cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
                 
-            if st.form_submit_button("💾 Confirmar e Debitar do Saldo", type="primary", use_container_width=True):
+            if st.form_submit_button("💾 Registrar Gasto", type="primary", use_container_width=True):
                 if not desc.strip():
-                    st.error("Preencha a descrição do gasto.")
+                    st.error("Preencha a descrição.")
                 else:
                     inserir_gasto_rapido(mes_atual, pessoa, desc, cat, val)
-                    st.success("Gasto inserido e saldo atualizado!")
+                    st.success("Registrado com sucesso!")
                     st.rerun()
 
 # ====================================================================
@@ -827,58 +775,7 @@ if modo_visao.startswith("⚡"):
 else:
     st.markdown(f"#### ⚡ Resumo Consolidador — **{mes_atual}**")
 
-    s_final = d_foco['saldo_acumulado_final']
-    caixinha_acum = d_foco['caixinha_acumulada']
-    patrimonio_final = d_foco['patrimonio_total_final']
-
-    st.markdown(f"""
-        <div class="exec-grid">
-            <div class="exec-box">
-                <span class="exec-title">1. Saldo Inicial (Abertura Mês)</span>
-                <span class="exec-val">R$ {d_foco['saldo_anterior']:,.2f}</span>
-            </div>
-            <div class="exec-box {class_disp}">
-                <span class="exec-title" style="color:#6ee7b7;">2. Saldo Disponível Hoje</span>
-                <span class="exec-val" style="color:#6ee7b7;">R$ {d_foco['saldo_disponivel_hoje']:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">3. Renda Total Família</span>
-                <span class="exec-val" style="color:#34d399;">R$ {d_foco['renda_mes']:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">4. Saídas Totais (Geral)</span>
-                <span class="exec-val" style="color:#f87171;">R$ {d_foco['saidas_mes']:,.2f}</span>
-            </div>
-            <div class="exec-box exec-box-reserva">
-                <span class="exec-title" style="color:#38bdf8;">🔒 5. Caixinha Guardada</span>
-                <span class="exec-val" style="color:#38bdf8;">R$ {caixinha_acum:,.2f}</span>
-            </div>
-            <div class="exec-box {class_final}">
-                <span class="exec-title" style="color:#a5b4fc;">6. Saldo Corrente Previsto (Fim Mês)</span>
-                <span class="exec-val" style="color:#a5b4fc;">R$ {s_final:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">👤 P1 (Lucas) Renda</span>
-                <span class="exec-val" style="color:#60a5fa;">R$ {d_foco['renda_p1']:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">👤 P1 (Lucas) Gastos</span>
-                <span class="exec-val" style="color:#f87171;">R$ {d_foco['gasto_p1']:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">👤 P2 (Marcella) Renda</span>
-                <span class="exec-val" style="color:#60a5fa;">R$ {d_foco['renda_p2']:,.2f}</span>
-            </div>
-            <div class="exec-box">
-                <span class="exec-title">👤 P2 (Marcella) Gastos</span>
-                <span class="exec-val" style="color:#f87171;">R$ {d_foco['gasto_p2']:,.2f}</span>
-            </div>
-            <div class="exec-box exec-box-patrimonio">
-                <span class="exec-title" style="color:#fbbf24;">💰 Patrimônio Total Geral (Conta + Caixinha)</span>
-                <span class="exec-val" style="color:#fbbf24;">R$ {patrimonio_final:,.2f}</span>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    renderizar_painel_indicadores()
 
     st.divider()
 
@@ -1072,26 +969,22 @@ else:
 
         st.subheader("📅 Projeção Evolutiva Mês a Mês & Saldo de Caixa Acumulado")
         
-        row_sal_ini = {"Métrica": "1. Saldo Inicial (Abertura Mês)"}
-        row_sal_disp = {"Métrica": "2. Saldo Disponível Hoje (Em Conta)"}
-        row_rec = {"Métrica": "3. Renda Total Família"}
-        row_desp = {"Métrica": "4. Saídas Totais (Cartão + Fixos + PIX)"}
-        row_caixinha = {"Métrica": "5. Aporte Caixinha (Mês)"}
-        row_sobra_mes = {"Métrica": "6. Sobra Líquida Isolada do Mês"}
-        row_sal_fim = {"Métrica": "7. Saldo Final Previsto (Fim Mês)"}
-        row_reserva_acum = {"Métrica": "8. Caixinha Acumulada (Reserva)"}
-        row_patrimonio = {"Métrica": "9. Patrimônio Total Geral"}
-
-        dados_grafico = []
+        row_sal_ini = {"Métrica": "1. Saldo Inicial em Conta"}
+        row_rec = {"Métrica": "2. Renda Total Família"}
+        row_desp = {"Métrica": "3. Saídas Totais (Cartão + Fixos + PIX)"}
+        row_caixinha = {"Métrica": "4. Aporte Caixinha (Mês)"}
+        row_sobra_mes = {"Métrica": "5. Sobra Líquida Isolada do Mês"}
+        row_sal_fim = {"Métrica": "6. Saldo Final Conta (Corrente - Disponível)"}
+        row_reserva_acum = {"Métrica": "7. Caixinha Acumulada (Reserva Separada)"}
+        row_patrimonio = {"Métrica": "8. Patrimônio Total Geral (Conta + Caixinha)"}
 
         for m_t in meses_visiveis:
             d = dados_financeiros.get(m_t, {
-                "saldo_anterior": 0.0, "saldo_disponivel_hoje": 0.0, "renda_mes": 0.0,
-                "saidas_mes": 0.0, "caixinha_mes": 0.0, "caixinha_acumulada": 0.0,
-                "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0, "patrimonio_total_final": 0.0
+                "saldo_anterior": 0.0, "renda_mes": 0.0, "saidas_mes": 0.0,
+                "caixinha_mes": 0.0, "caixinha_acumulada": 0.0, "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0,
+                "patrimonio_total_final": 0.0
             })
             row_sal_ini[m_t] = d["saldo_anterior"]
-            row_sal_disp[m_t] = d["saldo_disponivel_hoje"]
             row_rec[m_t] = d["renda_mes"]
             row_desp[m_t] = d["saidas_mes"] - d["caixinha_mes"]
             row_caixinha[m_t] = d["caixinha_mes"]
@@ -1099,26 +992,13 @@ else:
             row_sal_fim[m_t] = d["saldo_acumulado_final"]
             row_reserva_acum[m_t] = d["caixinha_acumulada"]
             row_patrimonio[m_t] = d["patrimonio_total_final"]
-            
-            dados_grafico.append({
-                "Mês": m_t,
-                "Patrimônio Total": d["patrimonio_total_final"],
-                "Saldo Conta": d["saldo_acumulado_final"],
-                "Caixinha": d["caixinha_acumulada"]
-            })
 
         df_resumo = pd.DataFrame([
-            row_sal_ini, row_sal_disp, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
+            row_sal_ini, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
         ])
         
         cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
-        st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=310)
-
-        st.divider()
-        
-        st.subheader("📈 Curva de Crescimento do Patrimônio Familiar")
-        df_chart = pd.DataFrame(dados_grafico).set_index("Mês")
-        st.line_chart(df_chart, use_container_width=True)
+        st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=280)
 
     with tab_p1:
         renderizar_pessoa("Pessoa 1", "p1")
