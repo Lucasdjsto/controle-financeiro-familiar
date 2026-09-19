@@ -14,7 +14,7 @@ st.set_page_config(
 # 2. CSS Customizado Otimizado (Sem Cortes de Texto e Layout Responsivo)
 st.markdown("""
     <style>
-        /* Ajuste de respiro do topo para evitar corte dos títulos */
+        /* Respiro do topo para evitar corte do título */
         .block-container {
             padding-top: 2.2rem !important;
             padding-bottom: 0.8rem !important;
@@ -22,7 +22,7 @@ st.markdown("""
             padding-right: 0.5rem !important;
         }
         
-        /* Ajuste de fontes e altura de linha para H1, H2 e H3 do Streamlit */
+        /* Fontes e altura de linha para H1, H2 e H3 do Streamlit */
         h1 {
             font-size: 1.5rem !important;
             line-height: 1.3 !important;
@@ -404,7 +404,7 @@ def get_programado_cartao(pessoa):
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# Funções de Escrita em Banco Corrigidas
+# Funções de Escrita em Banco Corrigidas (Sem ON CONFLICT)
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -449,12 +449,7 @@ def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
                 item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
                 if item_str:
                     val = safe_float(row['valor'])
-                    query = text('''
-                        INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor)
-                        VALUES (:pessoa, :item, :mes, :val)
-                        ON CONFLICT (pessoa, item, mes_ano)
-                        DO UPDATE SET valor = :val;
-                    ''')
+                    query = text("INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor) VALUES (:pessoa, :item, :mes, :val)")
                     conn.execute(query, {"pessoa": pessoa, "item": item_str, "mes": m_b, "val": val})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
@@ -473,12 +468,7 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
                 if item_str:
                     val = safe_float(row['valor'])
                     pag = str(row.get('pagador', 'Dividido (50/50)'))
-                    query = text('''
-                        INSERT INTO gastos_comuns (item, mes_ano, valor, pagador)
-                        VALUES (:item, :mes, :val, :pag)
-                        ON CONFLICT (item, mes_ano)
-                        DO UPDATE SET valor = :val, pagador = :pag;
-                    ''')
+                    query = text("INSERT INTO gastos_comuns (item, mes_ano, valor, pagador) VALUES (:item, :mes, :val, :pag)")
                     conn.execute(query, {"item": item_str, "mes": m_b, "val": val, "pag": pag})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
