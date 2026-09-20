@@ -219,7 +219,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão com Supabase
+# 4. Conexão com Supabase Otimizada para Evitar Crashing/Timeout
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -233,9 +233,9 @@ def get_db_engine():
         db_url,
         pool_size=2,
         max_overflow=3,
-        pool_recycle=60,
-        pool_pre_ping=True,
-        connect_args={"connect_timeout": 5}
+        pool_recycle=300,   # Recicla as conexões inativas a cada 5 minutos
+        pool_pre_ping=True,  # Verifica se a conexão está viva antes de realizar a consulta
+        connect_args={"connect_timeout": 10}
     )
 
 engine = get_db_engine()
@@ -292,7 +292,7 @@ def init_db():
                 );
             '''))
     except Exception as e:
-        st.error(f"Erro de Conexão com o Banco de Dados: {e}")
+        st.error(f"Erro ao inicializar o Banco de Dados: {e}")
 
 init_db()
 
@@ -339,19 +339,23 @@ ESTRUTURA_RECEITAS = ["Salário Base", "Receita Extra", "Receita Extra 1", "Rece
 
 @st.cache_data(ttl=60, show_spinner=False)
 def carregar_dados_globais():
-    with engine.connect() as conn:
-        df_proj = pd.read_sql(text("SELECT * FROM projecao"), conn)
-        df_fixos = pd.read_sql(text("SELECT * FROM gastos_fixos"), conn)
-        df_comuns = pd.read_sql(text("SELECT * FROM gastos_comuns"), conn)
-        df_pontuais = pd.read_sql(text("SELECT * FROM pontuais_dinheiro"), conn)
-        df_caixinha = pd.read_sql(text("SELECT * FROM caixinha"), conn)
-        df_prog = pd.read_sql(text("SELECT * FROM programado_cartao"), conn)
-        df_status = pd.read_sql(text("SELECT * FROM status_faturas"), conn)
-    
-    if 'pagador' not in df_comuns.columns:
-        df_comuns['pagador'] = 'Dividido (50/50)'
+    try:
+        with engine.connect() as conn:
+            df_proj = pd.read_sql(text("SELECT * FROM projecao"), conn)
+            df_fixos = pd.read_sql(text("SELECT * FROM gastos_fixos"), conn)
+            df_comuns = pd.read_sql(text("SELECT * FROM gastos_comuns"), conn)
+            df_pontuais = pd.read_sql(text("SELECT * FROM pontuais_dinheiro"), conn)
+            df_caixinha = pd.read_sql(text("SELECT * FROM caixinha"), conn)
+            df_prog = pd.read_sql(text("SELECT * FROM programado_cartao"), conn)
+            df_status = pd.read_sql(text("SELECT * FROM status_faturas"), conn)
         
-    return df_proj, df_fixos, df_comuns, df_pontuais, df_caixinha, df_prog, df_status
+        if 'pagador' not in df_comuns.columns:
+            df_comuns['pagador'] = 'Dividido (50/50)'
+            
+        return df_proj, df_fixos, df_comuns, df_pontuais, df_caixinha, df_prog, df_status
+    except Exception as e:
+        st.warning("⚠️ Instabilidade na leitura do banco de dados. Tentando novamente...")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 df_proj_all, df_fixos_all, df_comuns_all, df_pontuais_all, df_caixinha_all, df_prog_all, df_status_all = carregar_dados_globais()
 
@@ -404,7 +408,7 @@ def get_programado_cartao(pessoa):
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# Funções de Escrita em Banco Corrigidas (Sem ON CONFLICT)
+# Funções de Escrita em Banco Corrigidas
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
