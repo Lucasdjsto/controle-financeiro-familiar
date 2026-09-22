@@ -373,16 +373,18 @@ def get_fixos_no_mes(pessoa, mes_tela):
     df_p = df_fixos_all[df_fixos_all['pessoa'] == pessoa].copy()
     df_p['mes_ano'] = df_p['mes_ano'].fillna("08.2026").astype(str)
     
+    # 1. Busca exatamente os registros deste mês
     df_mes = df_p[df_p['mes_ano'] == mes_b]
     if not df_mes.empty:
         return df_mes[['item', 'valor']]
     
-    meses_anteriores = [m for m in df_p['mes_ano'].unique() if str(m) <= mes_b]
+    # 2. Se o mês for estritamente anterior ao mês do registro cadastrado, NÃO aplica
+    meses_anteriores = [m for m in df_p['mes_ano'].unique() if str(m) < mes_b]
     if meses_anteriores:
         ultimo_m = max(meses_anteriores)
         return df_p[df_p['mes_ano'] == ultimo_m][['item', 'valor']]
     
-    return df_p[['item', 'valor']] if not df_p.empty else pd.DataFrame(columns=['item', 'valor'])
+    return pd.DataFrame(columns=['item', 'valor'])
 
 def get_comuns_no_mes(mes_tela):
     mes_b = mes_tela_para_banco(mes_tela)
@@ -396,12 +398,31 @@ def get_comuns_no_mes(mes_tela):
     if not df_mes.empty:
         return df_mes[['item', 'valor', 'pagador']]
     
-    meses_anteriores = [m for m in df_c['mes_ano'].unique() if str(m) <= mes_b]
+    meses_anteriores = [m for m in df_c['mes_ano'].unique() if str(m) < mes_b]
     if meses_anteriores:
         ultimo_m = max(meses_anteriores)
         return df_c[df_c['mes_ano'] == ultimo_m][['item', 'valor', 'pagador']]
         
-    return df_c[['item', 'valor', 'pagador']] if not df_c.empty else pd.DataFrame(columns=['item', 'valor', 'pagador'])
+    return pd.DataFrame(columns=['item', 'valor', 'pagador'])
+
+def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
+    idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
+    meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
+    
+    with engine.begin() as conn:
+        for m_t in meses_afetados_tela:
+            m_b = mes_tela_para_banco(m_t)
+            # Limpa e grava apenas do mês de referência para a frente
+            conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"), {"pessoa": pessoa, "mes": m_b})
+            for _, row in df_editado.iterrows():
+                item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
+                if item_str:
+                    val = safe_float(row['valor'])
+                    query = text("INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor) VALUES (:pessoa, :item, :mes, :val)")
+                    conn.execute(query, {"pessoa": pessoa, "item": item_str, "mes": m_b, "val": val})
+                    
+    salvar_ultimo_mes_banco(mes_inicio_tela)
+    st.cache_data.clear()
 
 def get_programado_cartao(pessoa):
     if df_prog_all.empty:
