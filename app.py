@@ -217,7 +217,7 @@ def mes_tela_para_banco(mes_tela):
     except:
         return mes_tela
 
-# 3. Autenticação Familiar
+# 3. Autenticação Familiar (Senha Corrigida: pretabebe)
 def verificar_senha():
     if "autenticado_fam" not in st.session_state:
         st.session_state["autenticado_fam"] = False
@@ -239,7 +239,7 @@ def verificar_senha():
             botao_entrar = st.form_submit_button("Acessar Painel Familiar", use_container_width=True)
             
             if botao_entrar:
-                if senha_digitada == "Lucas@338035":
+                if senha_digitada == "pretabebe":
                     st.session_state["autenticado_fam"] = True
                     st.success("Autenticado com sucesso!")
                     st.rerun()
@@ -293,7 +293,6 @@ def init_db():
                     id SERIAL PRIMARY KEY, mes_ano TEXT, descricao TEXT, categoria TEXT, valor DOUBLE PRECISION DEFAULT 0
                 );
             '''))
-            # Tabela de Receitas Rápidas Familiares
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS fam_pontuais_receitas (
                     id SERIAL PRIMARY KEY, mes_ano TEXT, descricao TEXT, categoria TEXT, valor DOUBLE PRECISION DEFAULT 0
@@ -943,7 +942,7 @@ else:
                 "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0, "patrimonio_total_final": 0.0
             })
             
-            # Formatação ISO (AAAA-MM) para garantir a ordenação cronológica correta
+            # Formatação ISO (AAAA-MM) para garantir a ordenação cronológica correta nos gráficos
             m_num, y_num = map(int, m_t.split("."))
             mes_iso = f"{y_num:04d}-{m_num:02d}"
 
