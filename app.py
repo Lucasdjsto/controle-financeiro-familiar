@@ -371,14 +371,17 @@ def get_fixos_no_mes(pessoa, mes_tela):
         return pd.DataFrame(columns=['item', 'valor'])
     
     df_p = df_fixos_all[df_fixos_all['pessoa'] == pessoa].copy()
+    if df_p.empty:
+        return pd.DataFrame(columns=['item', 'valor'])
+
     df_p['mes_ano'] = df_p['mes_ano'].fillna("08.2026").astype(str)
     
-    # 1. Busca exatamente os registros deste mês
+    # 1. Se existem registros gravados EXATAMENTE para o mês consultado, retorna APENAS eles
     df_mes = df_p[df_p['mes_ano'] == mes_b]
     if not df_mes.empty:
         return df_mes[['item', 'valor']]
     
-    # 2. Se o mês for estritamente anterior ao mês do registro cadastrado, NÃO aplica
+    # 2. Se NÃO existem registros para este mês, busca a última foto histórica ANTERIOR
     meses_anteriores = [m for m in df_p['mes_ano'].unique() if str(m) < mes_b]
     if meses_anteriores:
         ultimo_m = max(meses_anteriores)
@@ -412,8 +415,11 @@ def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
     with engine.begin() as conn:
         for m_t in meses_afetados_tela:
             m_b = mes_tela_para_banco(m_t)
-            # Limpa e grava apenas do mês de referência para a frente
-            conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"), {"pessoa": pessoa, "mes": m_b})
+            # Deleta todos os registros futuros para a pessoa garantindo que não fiquem 'fantasmas' de edições anteriores
+            conn.execute(
+                text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"),
+                {"pessoa": pessoa, "mes": m_b}
+            )
             for _, row in df_editado.iterrows():
                 item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
                 if item_str:
