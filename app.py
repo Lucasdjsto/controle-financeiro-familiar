@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado - Identidade Visual Familiar (Tema Blue/Indigo)
+# 2. CSS Customizado - Identidade Visual Familiar
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -217,7 +217,7 @@ def mes_tela_para_banco(mes_tela):
     except:
         return mes_tela
 
-# 3. Autenticação Familiar (Senha Corrigida: pretabebe)
+# 3. Autenticação Familiar (Senha: pretabebe)
 def verificar_senha():
     if "autenticado_fam" not in st.session_state:
         st.session_state["autenticado_fam"] = False
@@ -228,7 +228,7 @@ def verificar_senha():
     st.markdown("""
         <div style='text-align: center; padding: 40px 20px;'>
             <h2 style='color: #60a5fa;'>🏠 Gestão Financeira Familiar</h2>
-            <p style='color: #9ca3af; font-size: 0.9rem;'>Digite a senha de acesso para visualizar e gerir o orçamento da família.</p>
+            <p style='color: #9ca3af; font-size: 0.9rem;'>Digite a senha de acesso para gerir o orçamento da família.</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -357,8 +357,11 @@ def gerar_linha_tempo_tela(mes_inicio_str="10.2026", quantidade_meses=48):
 
 TODOS_MESES_TELA = gerar_linha_tempo_tela("10.2026", 48)
 
-ESTRUTURA_CARTÕES_BASE = ["Cartão Principal Família", "Cartão Secundário Família"]
-ESTRUTURA_RECEITAS = ["Renda Principal Família", "Renda Secundária Família", "Outras Rendas"]
+# Estrutura Original da Gestão Familiar
+ESTRUTURA_CARTÕES_BASE = ["Pessoa 1", "Pessoa 2"]
+ESTRUTURA_RECEITAS_P1 = ["Líquido Salário P1", "Vale Refeição P1", "Vale Alimentação P1"]
+ESTRUTURA_RECEITAS_P2 = ["Líquido Salário P2", "Vale Refeição P2", "Vale Alimentação P2"]
+ESTRUTURA_RECEITAS_TODAS = ESTRUTURA_RECEITAS_P1 + ESTRUTURA_RECEITAS_P2
 
 @st.cache_data(ttl=60, show_spinner=False)
 def carregar_dados_globais():
@@ -526,7 +529,7 @@ def salvar_programado_cartao(df_editado, mes_atual_foco):
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
-# Cálculo Financeiro Familiar
+# Cálculo Financeiro Familiar (Respeitando Pessoa 1 e Pessoa 2)
 def calcular_sequencia_financeira():
     prog_total = get_programado_cartao()['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
 
@@ -542,7 +545,7 @@ def calcular_sequencia_financeira():
         df_fix = get_fixos_no_mes(m_t)
         fixos_val = df_fix['valor'].apply(safe_float).sum() if not df_fix.empty else 0.0
 
-        renda_fixa = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+        renda_fixa = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS_TODAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         r_pontual_df = df_rec_pontuais_all[df_rec_pontuais_all['mes_ano'] == m_b] if not df_rec_pontuais_all.empty else pd.DataFrame()
         receita_pontual_mes = r_pontual_df['valor'].apply(safe_float).sum() if not r_pontual_df.empty else 0.0
 
@@ -765,34 +768,61 @@ else:
 
     with tab_geral:
         with st.form("form_financas_fam"):
-            st.subheader("💵 1. Receitas Familiar Previstas (Fixas)")
-            rows_rec = []
-            for item in ESTRUTURA_RECEITAS:
+            st.subheader("💵 1. Receitas de Pessoa 1")
+            rows_p1 = []
+            for item in ESTRUTURA_RECEITAS_P1:
                 row_dict = {"Item": item}
                 for mes_t in meses_visiveis:
                     df_item = get_projecao("RECEITA", mes_t)
                     val = df_item[df_item['item'] == item]['valor']
                     row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
-                rows_rec.append(row_dict)
+                rows_p1.append(row_dict)
             
-            row_total_rec = {"Item": "➕ Total Receitas Familiares"}
+            row_tot_p1 = {"Item": "➕ Total Renda Pessoa 1"}
             for mes_t in meses_visiveis:
-                soma_rec = sum(safe_float(r.get(mes_t)) for r in rows_rec)
-                row_total_rec[mes_t] = soma_rec
-            rows_rec.append(row_total_rec)
+                soma_p1 = sum(safe_float(r.get(mes_t)) for r in rows_p1)
+                row_tot_p1[mes_t] = soma_p1
+            rows_p1.append(row_tot_p1)
 
-            df_rec_grid = pd.DataFrame(rows_rec)
-            conf_rec = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
-            conf_rec["Item"] = st.column_config.TextColumn("Descrição", disabled=True)
+            df_p1_grid = pd.DataFrame(rows_p1)
+            conf_p1 = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
+            conf_p1["Item"] = st.column_config.TextColumn("Descrição", disabled=True)
 
-            df_rec_edit = st.data_editor(
-                df_rec_grid, num_rows="fixed", use_container_width=True, key="editor_rec_fam", height=190,
-                column_config=conf_rec
+            df_p1_edit = st.data_editor(
+                df_p1_grid, num_rows="fixed", use_container_width=True, key="editor_p1_fam", height=180,
+                column_config=conf_p1
             )
 
             st.divider()
 
-            st.subheader("💳 2. Cartões de Crédito da Família")
+            st.subheader("💵 2. Receitas de Pessoa 2")
+            rows_p2 = []
+            for item in ESTRUTURA_RECEITAS_P2:
+                row_dict = {"Item": item}
+                for mes_t in meses_visiveis:
+                    df_item = get_projecao("RECEITA", mes_t)
+                    val = df_item[df_item['item'] == item]['valor']
+                    row_dict[mes_t] = safe_float(val.iloc[0]) if not val.empty else 0.0
+                rows_p2.append(row_dict)
+            
+            row_tot_p2 = {"Item": "➕ Total Renda Pessoa 2"}
+            for mes_t in meses_visiveis:
+                soma_p2 = sum(safe_float(r.get(mes_t)) for r in rows_p2)
+                row_tot_p2[mes_t] = soma_p2
+            rows_p2.append(row_tot_p2)
+
+            df_p2_grid = pd.DataFrame(rows_p2)
+            conf_p2 = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
+            conf_p2["Item"] = st.column_config.TextColumn("Descrição", disabled=True)
+
+            df_p2_edit = st.data_editor(
+                df_p2_grid, num_rows="fixed", use_container_width=True, key="editor_p2_fam", height=180,
+                column_config=conf_p2
+            )
+
+            st.divider()
+
+            st.subheader("💳 3. Cartões de Crédito da Família")
             rows_cart = []
             for item in ESTRUTURA_CARTÕES_BASE:
                 row_dict = {"Item": item}
@@ -810,16 +840,16 @@ else:
 
             df_cart_grid = pd.DataFrame(rows_cart)
             conf_cart = {mes: st.column_config.NumberColumn(f"{mes}", format="R$ %.2f", min_value=0.0) for mes in meses_visiveis}
-            conf_cart["Item"] = st.column_config.TextColumn("Cartão", disabled=True)
+            conf_cart["Item"] = st.column_config.TextColumn("Titular", disabled=True)
 
             df_cart_edit = st.data_editor(
-                df_cart_grid, num_rows="fixed", use_container_width=True, key="editor_cart_fam", height=200,
+                df_cart_grid, num_rows="fixed", use_container_width=True, key="editor_cart_fam", height=170,
                 column_config=conf_cart
             )
 
             st.divider()
 
-            st.subheader("🔮 3. Compras Parceladas / Assinaturas da Casa")
+            st.subheader("🔮 4. Compras Parceladas / Assinaturas da Casa")
             df_prog_cart = get_programado_cartao()
             df_prog_edit = st.data_editor(
                 df_prog_cart, num_rows="dynamic", use_container_width=True, key="editor_prog_fam", height=150,
@@ -832,7 +862,7 @@ else:
 
             st.divider()
 
-            st.subheader(f"📌 4. Gastos Fixos da Casa / Família ({mes_atual} em diante)")
+            st.subheader(f"📌 5. Gastos Fixos da Casa / Família ({mes_atual} em diante)")
             df_fixos_db = get_fixos_no_mes(mes_atual)
             df_fixos_edit = st.data_editor(
                 df_fixos_db, num_rows="dynamic", use_container_width=True, key="editor_fix_fam", height=150,
@@ -846,6 +876,8 @@ else:
             btn_salvar_fam = st.form_submit_button("💾 Salvar Planejamento Familiar", type="primary", use_container_width=True)
 
             if btn_salvar_fam:
+                # Junta receitas de P1 e P2 para salvar no banco mantendo a integridade dos itens
+                df_rec_edit = pd.concat([df_p1_edit, df_p2_edit], ignore_index=True)
                 salvar_projecao("RECEITA", df_rec_edit, meses_visiveis, mes_atual)
                 salvar_projecao("CARTAO", df_cart_edit, meses_visiveis, mes_atual)
                 salvar_programado_cartao(df_prog_edit, mes_atual)
