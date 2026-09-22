@@ -270,6 +270,12 @@ def init_db():
                     id SERIAL PRIMARY KEY, mes_ano TEXT, pessoa TEXT, descricao TEXT, categoria TEXT, valor DOUBLE PRECISION DEFAULT 0
                 );
             '''))
+            # Nova Tabela: Receitas Esporádicas / Rápidas
+            conn.execute(text('''
+                CREATE TABLE IF NOT EXISTS pontuais_receitas (
+                    id SERIAL PRIMARY KEY, mes_ano TEXT, pessoa TEXT, descricao TEXT, categoria TEXT, valor DOUBLE PRECISION DEFAULT 0
+                );
+            '''))
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS caixinha (
                     mes_ano TEXT PRIMARY KEY, valor DOUBLE PRECISION DEFAULT 0
@@ -345,6 +351,7 @@ def carregar_dados_globais():
             df_fixos = pd.read_sql(text("SELECT * FROM gastos_fixos"), conn)
             df_comuns = pd.read_sql(text("SELECT * FROM gastos_comuns"), conn)
             df_pontuais = pd.read_sql(text("SELECT * FROM pontuais_dinheiro"), conn)
+            df_rec_pontuais = pd.read_sql(text("SELECT * FROM pontuais_receitas"), conn)
             df_caixinha = pd.read_sql(text("SELECT * FROM caixinha"), conn)
             df_prog = pd.read_sql(text("SELECT * FROM programado_cartao"), conn)
             df_status = pd.read_sql(text("SELECT * FROM status_faturas"), conn)
@@ -352,12 +359,12 @@ def carregar_dados_globais():
         if 'pagador' not in df_comuns.columns:
             df_comuns['pagador'] = 'Dividido (50/50)'
             
-        return df_proj, df_fixos, df_comuns, df_pontuais, df_caixinha, df_prog, df_status
+        return df_proj, df_fixos, df_comuns, df_pontuais, df_rec_pontuais, df_caixinha, df_prog, df_status
     except Exception as e:
         st.warning("⚠️ Instabilidade na leitura do banco de dados. Tentando novamente...")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-df_proj_all, df_fixos_all, df_comuns_all, df_pontuais_all, df_caixinha_all, df_prog_all, df_status_all = carregar_dados_globais()
+df_proj_all, df_fixos_all, df_comuns_all, df_pontuais_all, df_rec_pontuais_all, df_caixinha_all, df_prog_all, df_status_all = carregar_dados_globais()
 
 def get_projecao(pessoa, tipo, mes_tela):
     mes_banco = mes_tela_para_banco(mes_tela)
@@ -376,12 +383,10 @@ def get_fixos_no_mes(pessoa, mes_tela):
 
     df_p['mes_ano'] = df_p['mes_ano'].fillna("08.2026").astype(str)
     
-    # 1. Se existem registros EXATAMENTE para este mês, retorna APENAS eles
     df_mes = df_p[df_p['mes_ano'] == mes_b]
     if not df_mes.empty:
         return df_mes[['item', 'valor']]
     
-    # 2. CORREÇÃO: Busca APENAS fotos de meses ESTRITAMENTE ANTERIORES ao mês consultado (< em vez de <=)
     meses_anteriores = [m for m in df_p['mes_ano'].unique() if str(m) < mes_b]
     if meses_anteriores:
         ultimo_m = max(meses_anteriores)
@@ -404,7 +409,6 @@ def get_comuns_no_mes(mes_tela):
     if not df_mes.empty:
         return df_mes[['item', 'valor', 'pagador']]
     
-    # CORREÇÃO: Busca APENAS fotos de meses ESTRITAMENTE ANTERIORES (< em vez de <=)
     meses_anteriores = [m for m in df_c['mes_ano'].unique() if str(m) < mes_b]
     if meses_anteriores:
         ultimo_m = max(meses_anteriores)
@@ -417,7 +421,6 @@ def get_programado_cartao(pessoa):
         return pd.DataFrame(columns=['id', 'cartao', 'descricao', 'valor'])
     return df_prog_all[df_prog_all['pessoa'] == pessoa][['id', 'cartao', 'descricao', 'valor']]
 
-# Funções de Escrita em Banco Corrigidas
 def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     mes_b = mes_tela_para_banco(mes_tela)
     with engine.begin() as conn:
@@ -457,7 +460,6 @@ def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
     with engine.begin() as conn:
         for m_t in meses_afetados_tela:
             m_b = mes_tela_para_banco(m_t)
-            # Limpa o mês de referência e meses futuros para replicar a alteração sem retroceder
             conn.execute(
                 text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"),
                 {"pessoa": pessoa, "mes": m_b}
@@ -531,9 +533,28 @@ def inserir_gasto_rapido(mes_tela, pessoa, descricao, categoria, valor):
     salvar_ultimo_mes_banco(mes_tela)
     st.cache_data.clear()
 
+def inserir_receita_rapida(mes_tela, pessoa, descricao, categoria, valor):
+    mes_b = mes_tela_para_banco(mes_tela)
+    with engine.begin() as conn:
+        query = '''
+            INSERT INTO pontuais_receitas (mes_ano, pessoa, descricao, categoria, valor)
+            VALUES (:mes_ano, :pessoa, :descricao, :categoria, :valor)
+        '''
+        conn.execute(text(query), {
+            "mes_ano": mes_b, "pessoa": pessoa, "descricao": descricao,
+            "categoria": categoria, "valor": safe_float(valor)
+        })
+    salvar_ultimo_mes_banco(mes_tela)
+    st.cache_data.clear()
+
 def deletar_gasto_pontual(gasto_id):
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM pontuais_dinheiro WHERE id = :id"), {"id": gasto_id})
+    st.cache_data.clear()
+
+def deletar_receita_pontual(rec_id):
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM pontuais_receitas WHERE id = :id"), {"id": rec_id})
     st.cache_data.clear()
 
 def salvar_caixinha(df_editado, mes_atual_foco):
@@ -565,7 +586,7 @@ def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
-# Cálculo Financeiro
+# Cálculo Financeiro Consolidado
 def calcular_sequencia_financeira():
     prog_p1 = get_programado_cartao("Pessoa 1")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
     prog_p2 = get_programado_cartao("Pessoa 2")['valor'].apply(safe_float).sum() if not df_prog_all.empty else 0.0
@@ -593,9 +614,20 @@ def calcular_sequencia_financeira():
 
         tot_fixos = fix_p1 + fix_p2 + comuns_val_total
 
-        r_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
-        r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
-        renda_mes = r_p1 + r_p2
+        # Receitas Fixas Programadas
+        r_p1_fixa = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+        r_p2_fixa = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+
+        # Receitas Rápidas / Esporádicas do Mês
+        rec_df = df_rec_pontuais_all[df_rec_pontuais_all['mes_ano'] == m_b] if not df_rec_pontuais_all.empty else pd.DataFrame()
+        r_p1_pont = rec_df[rec_df['pessoa'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not rec_df.empty else 0.0
+        r_p2_pont = rec_df[rec_df['pessoa'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not rec_df.empty else 0.0
+        r_comum_pont = rec_df[rec_df['pessoa'] == 'Comum / Casa']['valor'].apply(safe_float).sum() if not rec_df.empty else 0.0
+
+        r_p1 = r_p1_fixa + r_p1_pont
+        r_p2 = r_p2_fixa + r_p2_pont
+        receita_pontual_mes = r_p1_pont + r_p2_pont + r_comum_pont
+        renda_mes = r_p1 + r_p2 + r_comum_pont
 
         cartoes_p1_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 1"]
         cartoes_p2_validos = ESTRUTURA_CARTÕES_BASE["Pessoa 2"]
@@ -617,7 +649,7 @@ def calcular_sequencia_financeira():
         pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
         pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
         pont_comum = p_df[p_df['pessoa'] == 'Comum / Casa']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
-        pontual_mes = pont_p1 + pont_p2 + pont_comum
+        gasto_pontual_mes = pont_p1 + pont_p2 + pont_comum
 
         gasto_exclusivo_p1 = (c_p1 + add_prog_p1) + fix_p1 + pont_p1 + comuns_p1 + (comuns_div / 2)
         gasto_exclusivo_p2 = (c_p2 + add_prog_p2) + fix_p2 + pont_p2 + comuns_p2 + (comuns_div / 2)
@@ -625,11 +657,11 @@ def calcular_sequencia_financeira():
         caixinha_mes = df_caixinha_all[df_caixinha_all['mes_ano'] == m_b]['valor'].apply(safe_float).sum() if not df_caixinha_all.empty else 0.0
         caixinha_acumulada_geral += caixinha_mes
 
-        saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + pontual_mes + caixinha_mes
+        saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + gasto_pontual_mes + caixinha_mes
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
         saldo_herdeiro_abertura = saldo_acumulado_anterior
-        saldo_disponivel_hoje = saldo_herdeiro_abertura - pontual_mes
+        saldo_disponivel_hoje = saldo_herdeiro_abertura + receita_pontual_mes - gasto_pontual_mes
         
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
         patrimonio_total_final = saldo_conta_final + caixinha_acumulada_geral
@@ -811,23 +843,39 @@ if modo_visao.startswith("⚡"):
 
     st.divider()
 
-    with st.expander(f"➕ **Adicionar Gasto Rápido em {mes_atual} (PIX / Dinheiro)**", expanded=False):
-        with st.form(f"form_gasto_rapido_fast_{mes_atual}", clear_on_submit=True):
-            c_f1, c_f2 = st.columns(2)
-            with c_f1:
-                desc = st.text_input("Descrição", placeholder="ex: Feira, Farmácia")
-                val = st.number_input("Valor (R$)", min_value=0.01, step=5.0, format="%.2f")
-            with c_f2:
-                pessoa = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
-                cat = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
+    col_exp1, col_exp2 = st.columns(2)
+
+    with col_exp1:
+        with st.expander(f"🟢 **Registrar Receita Rápida em {mes_atual} (PIX / Extra)**", expanded=False):
+            with st.form(f"form_rec_rapida_fast_{mes_atual}", clear_on_submit=True):
+                desc_r = st.text_input("Descrição da Entrada", placeholder="ex: Reembolso, Venda OLX, Pix")
+                val_r = st.number_input("Valor Recebido (R$)", min_value=0.01, step=10.0, format="%.2f")
+                pessoa_r = st.selectbox("Favorecido / Destino", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
+                cat_r = st.selectbox("Categoria", ["Pix / Transferência", "Trabalho Extra", "Vendas", "Reembolso", "Outros"])
                 
-            if st.form_submit_button("💾 Registrar Gasto", type="primary", use_container_width=True):
-                if not desc.strip():
-                    st.error("Preencha a descrição.")
-                else:
-                    inserir_gasto_rapido(mes_atual, pessoa, desc, cat, val)
-                    st.success("Registrado com sucesso!")
-                    st.rerun()
+                if st.form_submit_button("💵 Adicionar ao Saldo Disponível", type="primary", use_container_width=True):
+                    if not desc_r.strip():
+                        st.error("Preencha a descrição.")
+                    else:
+                        inserir_receita_rapida(mes_atual, pessoa_r, desc_r, cat_r, val_r)
+                        st.success("Receita adicionada ao saldo!")
+                        st.rerun()
+
+    with col_exp2:
+        with st.expander(f"🔴 **Registrar Gasto Rápido em {mes_atual} (PIX / Dinheiro)**", expanded=False):
+            with st.form(f"form_gasto_rapido_fast_{mes_atual}", clear_on_submit=True):
+                desc_g = st.text_input("Descrição do Gasto", placeholder="ex: Feira, Farmácia, Barbeiro")
+                val_g = st.number_input("Valor Pago (R$)", min_value=0.01, step=5.0, format="%.2f")
+                pessoa_g = st.selectbox("Quem Pagou?", ["Pessoa 1", "Pessoa 2", "Comum / Casa"])
+                cat_g = st.selectbox("Categoria", ["Mercado / Feira", "Barbeiro / Estética", "Lazer / Restaurante", "Transporte", "Farmácia", "Outros"])
+                
+                if st.form_submit_button("💸 Deduzir do Saldo Disponível", type="primary", use_container_width=True):
+                    if not desc_g.strip():
+                        st.error("Preencha a descrição.")
+                    else:
+                        inserir_gasto_rapido(mes_atual, pessoa_g, desc_g, cat_g, val_g)
+                        st.success("Gasto deduzido do saldo!")
+                        st.rerun()
 
 # ====================================================================
 # SEÇÃO 2: PROJEÇÃO COMPLETA & LONGO PRAZO
@@ -940,21 +988,38 @@ else:
 
         st.divider()
 
-        st.subheader("💸 Extrato de Gastos Esporádicos (PIX / Dinheiro)")
         mes_b_atual = mes_tela_para_banco(mes_atual)
-        pontuais_p = df_pontuais_all[(df_pontuais_all['pessoa'] == pessoa) & (df_pontuais_all['mes_ano'] == mes_b_atual)] if not df_pontuais_all.empty else pd.DataFrame()
-        
-        if not pontuais_p.empty:
-            for _, g in pontuais_p.iterrows():
-                c_g1, c_g2, c_g3, c_g4 = st.columns([4, 3, 3, 1])
-                c_g1.write(f"**{g['descricao']}**")
-                c_g2.write(f"🏷️ {g['categoria']}")
-                c_g3.write(f"**R$ {safe_float(g['valor']):,.2f}**")
-                if c_g4.button("🗑️", key=f"del_{g['id']}"):
-                    deletar_gasto_pontual(g['id'])
-                    st.rerun()
-        else:
-            st.info("Nenhum gasto em PIX/dinheiro registrado para este mês.")
+        c_ext1, c_ext2 = st.columns(2)
+
+        with c_ext1:
+            st.subheader("💵 Extrato de Receitas Rápidas")
+            rec_p = df_rec_pontuais_all[(df_rec_pontuais_all['pessoa'] == pessoa) & (df_rec_pontuais_all['mes_ano'] == mes_b_atual)] if not df_rec_pontuais_all.empty else pd.DataFrame()
+            if not rec_p.empty:
+                for _, r in rec_p.iterrows():
+                    c_r1, c_r2, c_r3, c_r4 = st.columns([4, 3, 3, 1])
+                    c_r1.write(f"**{r['descricao']}**")
+                    c_r2.write(f"🏷️ {r['categoria']}")
+                    c_r3.write(f"**+ R$ {safe_float(r['valor']):,.2f}**")
+                    if c_r4.button("🗑️", key=f"del_rec_{r['id']}"):
+                        deletar_receita_pontual(r['id'])
+                        st.rerun()
+            else:
+                st.info("Nenhuma receita rápida registrada para este mês.")
+
+        with c_ext2:
+            st.subheader("💸 Extrato de Gastos Esporádicos (PIX)")
+            pontuais_p = df_pontuais_all[(df_pontuais_all['pessoa'] == pessoa) & (df_pontuais_all['mes_ano'] == mes_b_atual)] if not df_pontuais_all.empty else pd.DataFrame()
+            if not pontuais_p.empty:
+                for _, g in pontuais_p.iterrows():
+                    c_g1, c_g2, c_g3, c_g4 = st.columns([4, 3, 3, 1])
+                    c_g1.write(f"**{g['descricao']}**")
+                    c_g2.write(f"🏷️ {g['categoria']}")
+                    c_g3.write(f"**- R$ {safe_float(g['valor']):,.2f}**")
+                    if c_g4.button("🗑️", key=f"del_{g['id']}"):
+                        deletar_gasto_pontual(g['id'])
+                        st.rerun()
+            else:
+                st.info("Nenhum gasto em PIX/dinheiro registrado para este mês.")
 
     with tab_consolidado:
         st.header("🏠 Visão Consolidada, Caixinha & Totais")
@@ -1012,7 +1077,7 @@ else:
 
         with st.form("form_caixinha"):
             df_caixinha_edit = st.data_editor(
-                df_caixinha_grid, num_rows="fixed", use_container_width=True, key="editor_caixinha", height=200,
+                df_caixinha_grid, num_rows="fixed", use_container_width=True, key="editor_caixinha", height=180,
                 column_config={
                     "Mês": st.column_config.TextColumn("Mês", disabled=True),
                     "Aporte do Mês (R$)": st.column_config.NumberColumn("Aporte do Mês (R$)", format="R$ %.2f", min_value=0.0),
@@ -1027,40 +1092,77 @@ else:
 
         st.divider()
 
-        st.subheader("📅 Projeção Evolutiva Mês a Mês & Saldo de Caixa Acumulado")
-        
-        row_sal_ini = {"Métrica": "1. Saldo Inicial (Abertura Mês)"}
-        row_sal_disp = {"Métrica": "2. Saldo Disponível Hoje (Em Conta)"}
-        row_rec = {"Métrica": "3. Renda Total Família"}
-        row_desp = {"Métrica": "4. Saídas Totais (Cartão + Fixos + PIX)"}
-        row_caixinha = {"Métrica": "5. Aporte Caixinha (Mês)"}
-        row_sobra_mes = {"Métrica": "6. Sobra Líquida Isolada do Mês"}
-        row_sal_fim = {"Métrica": "7. Saldo Final Previsto (Fim Mês)"}
-        row_reserva_acum = {"Métrica": "8. Caixinha Acumulada (Reserva)"}
-        row_patrimonio = {"Métrica": "9. Patrimônio Total Geral"}
+        st.subheader("📈 Visão Gráfica e Evolução da Saúde Financeira do Casal")
 
+        chart_data_list = []
         for m_t in meses_visiveis:
             d = dados_financeiros.get(m_t, {
                 "saldo_anterior": 0.0, "saldo_disponivel_hoje": 0.0, "renda_mes": 0.0,
                 "saidas_mes": 0.0, "caixinha_mes": 0.0, "caixinha_acumulada": 0.0,
                 "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0, "patrimonio_total_final": 0.0
             })
-            row_sal_ini[m_t] = d["saldo_anterior"]
-            row_sal_disp[m_t] = d["saldo_disponivel_hoje"]
-            row_rec[m_t] = d["renda_mes"]
-            row_desp[m_t] = d["saidas_mes"] - d["caixinha_mes"]
-            row_caixinha[m_t] = d["caixinha_mes"]
-            row_sobra_mes[m_t] = d["sobra_mes_isolada"]
-            row_sal_fim[m_t] = d["saldo_acumulado_final"]
-            row_reserva_acum[m_t] = d["caixinha_acumulada"]
-            row_patrimonio[m_t] = d["patrimonio_total_final"]
+            
+            # Formatação ISO (AAAA-MM) para garantir a ordenação cronológica rigorosa no gráfico
+            m_num, y_num = map(int, m_t.split("."))
+            mes_iso = f"{y_num:04d}-{m_num:02d}"
 
-        df_resumo = pd.DataFrame([
-            row_sal_ini, row_sal_disp, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
-        ])
-        
-        cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
-        st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=310)
+            chart_data_list.append({
+                "Mês": mes_iso,
+                "Receitas": d["renda_mes"],
+                "Despesas": d["saidas_mes"] - d["caixinha_mes"],
+                "Sobra Líquida": d["sobra_mes_isolada"],
+                "Saldo Previsto": d["saldo_acumulado_final"],
+                "Patrimônio Total": d["patrimonio_total_final"]
+            })
+
+        df_chart = pd.DataFrame(chart_data_list)
+
+        st.markdown("##### 💎 Trajetória do Patrimônio e Saldo em Conta")
+        st.line_chart(df_chart, x="Mês", y=["Patrimônio Total", "Saldo Previsto"], color=["#2563eb", "#38bdf8"])
+
+        col_g1, col_g2 = st.columns(2)
+
+        with col_g1:
+            st.markdown("##### ⚖️ Comparativo: Receitas vs. Despesas")
+            st.bar_chart(df_chart, x="Mês", y=["Receitas", "Despesas"], color=["#34d399", "#f87171"], stack=False)
+
+        with col_g2:
+            st.markdown("##### 💵 Sobra Líquida Isolada por Mês")
+            st.bar_chart(df_chart, x="Mês", y=["Sobra Líquida"], color=["#fbbf24"])
+
+        with st.expander("🔍 **Ver Tabela Numérica Detalhada Mês a Mês**", expanded=False):
+            row_sal_ini = {"Métrica": "1. Saldo Inicial (Abertura Mês)"}
+            row_sal_disp = {"Métrica": "2. Saldo Disponível Hoje (Em Conta)"}
+            row_rec = {"Métrica": "3. Renda Total Família"}
+            row_desp = {"Métrica": "4. Saídas Totais (Cartão + Fixos + PIX)"}
+            row_caixinha = {"Métrica": "5. Aporte Caixinha (Mês)"}
+            row_sobra_mes = {"Métrica": "6. Sobra Líquida Isolada do Mês"}
+            row_sal_fim = {"Métrica": "7. Saldo Final Previsto (Fim Mês)"}
+            row_reserva_acum = {"Métrica": "8. Caixinha Acumulada (Reserva)"}
+            row_patrimonio = {"Métrica": "9. Patrimônio Total Geral"}
+
+            for m_t in meses_visiveis:
+                d = dados_financeiros.get(m_t, {
+                    "saldo_anterior": 0.0, "saldo_disponivel_hoje": 0.0, "renda_mes": 0.0,
+                    "saidas_mes": 0.0, "caixinha_mes": 0.0, "caixinha_acumulada": 0.0,
+                    "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0, "patrimonio_total_final": 0.0
+                })
+                row_sal_ini[m_t] = d["saldo_anterior"]
+                row_sal_disp[m_t] = d["saldo_disponivel_hoje"]
+                row_rec[m_t] = d["renda_mes"]
+                row_desp[m_t] = d["saidas_mes"] - d["caixinha_mes"]
+                row_caixinha[m_t] = d["caixinha_mes"]
+                row_sobra_mes[m_t] = d["sobra_mes_isolada"]
+                row_sal_fim[m_t] = d["saldo_acumulado_final"]
+                row_reserva_acum[m_t] = d["caixinha_acumulada"]
+                row_patrimonio[m_t] = d["patrimonio_total_final"]
+
+            df_resumo = pd.DataFrame([
+                row_sal_ini, row_sal_disp, row_rec, row_desp, row_caixinha, row_sobra_mes, row_sal_fim, row_reserva_acum, row_patrimonio
+            ])
+            
+            cols_conf = {mes: st.column_config.NumberColumn(format="R$ %.2f") for mes in meses_visiveis}
+            st.dataframe(df_resumo, use_container_width=True, column_config=cols_conf, height=310)
 
     with tab_p1:
         renderizar_pessoa("Pessoa 1", "p1")
