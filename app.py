@@ -219,7 +219,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão com Supabase Otimizada para Evitar Crashing/Timeout
+# 4. Conexão com Supabase Otimizada
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -233,8 +233,8 @@ def get_db_engine():
         db_url,
         pool_size=2,
         max_overflow=3,
-        pool_recycle=300,   # Recicla as conexões inativas a cada 5 minutos
-        pool_pre_ping=True,  # Verifica se a conexão está viva antes de realizar a consulta
+        pool_recycle=300,
+        pool_pre_ping=True,
         connect_args={"connect_timeout": 10}
     )
 
@@ -376,12 +376,12 @@ def get_fixos_no_mes(pessoa, mes_tela):
 
     df_p['mes_ano'] = df_p['mes_ano'].fillna("08.2026").astype(str)
     
-    # 1. Busca exatamente os registros deste mês no banco
+    # 1. Se existem registros EXATAMENTE para este mês, retorna APENAS eles
     df_mes = df_p[df_p['mes_ano'] == mes_b]
     if not df_mes.empty:
         return df_mes[['item', 'valor']]
     
-    # 2. Se não houver nada gravado no mês, busca a última foto histórica estritamente anterior
+    # 2. CORREÇÃO: Busca APENAS fotos de meses ESTRITAMENTE ANTERIORES ao mês consultado (< em vez de <=)
     meses_anteriores = [m for m in df_p['mes_ano'].unique() if str(m) < mes_b]
     if meses_anteriores:
         ultimo_m = max(meses_anteriores)
@@ -404,7 +404,8 @@ def get_comuns_no_mes(mes_tela):
     if not df_mes.empty:
         return df_mes[['item', 'valor', 'pagador']]
     
-    meses_anteriores = [m for m in df_c['mes_ano'].unique() if str(m) <= mes_b]
+    # CORREÇÃO: Busca APENAS fotos de meses ESTRITAMENTE ANTERIORES (< em vez de <=)
+    meses_anteriores = [m for m in df_c['mes_ano'].unique() if str(m) < mes_b]
     if meses_anteriores:
         ultimo_m = max(meses_anteriores)
         return df_c[df_c['mes_ano'] == ultimo_m][['item', 'valor', 'pagador']]
@@ -450,19 +451,17 @@ def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
     st.cache_data.clear()
 
 def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
-    # Identifica o mês atual e todos os meses futuros afetados na linha do tempo
     idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
     meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
     
     with engine.begin() as conn:
         for m_t in meses_afetados_tela:
             m_b = mes_tela_para_banco(m_t)
-            # Limpa os dados do mês atual e dos meses futuros para não deixar "fantasmas"
+            # Limpa o mês de referência e meses futuros para replicar a alteração sem retroceder
             conn.execute(
                 text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"),
                 {"pessoa": pessoa, "mes": m_b}
             )
-            # Reinsere a lista atualizada
             for _, row in df_editado.iterrows():
                 item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
                 if item_str:
@@ -618,7 +617,7 @@ def calcular_sequencia_financeira():
         pont_p1 = p_df[p_df['pessoa'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
         pont_p2 = p_df[p_df['pessoa'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
         pont_comum = p_df[p_df['pessoa'] == 'Comum / Casa']['valor'].apply(safe_float).sum() if not p_df.empty else 0.0
-        pontual_mes = pont_p1 + pont_comum
+        pontual_mes = pont_p1 + pont_p2 + pont_comum
 
         gasto_exclusivo_p1 = (c_p1 + add_prog_p1) + fix_p1 + pont_p1 + comuns_p1 + (comuns_div / 2)
         gasto_exclusivo_p2 = (c_p2 + add_prog_p2) + fix_p2 + pont_p2 + comuns_p2 + (comuns_div / 2)
