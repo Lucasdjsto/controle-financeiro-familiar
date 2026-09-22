@@ -469,38 +469,35 @@ def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
     st.cache_data.clear()
 
 def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
-    idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
-    meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
-    
+    # Grava EXCLUSIVAMENTE no mês de início selecionado, permitindo que a busca histórica herde sem duplicar registros
+    mes_b = mes_tela_para_banco(mes_inicio_tela)
     with engine.begin() as conn:
-        for m_t in meses_afetados_tela:
-            m_b = mes_tela_para_banco(m_t)
-            conn.execute(text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"), {"pessoa": pessoa, "mes": m_b})
-            for _, row in df_editado.iterrows():
-                item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
-                if item_str:
-                    val = safe_float(row['valor'])
-                    query = text("INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor) VALUES (:pessoa, :item, :mes, :val)")
-                    conn.execute(query, {"pessoa": pessoa, "item": item_str, "mes": m_b, "val": val})
+        conn.execute(
+            text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"),
+            {"pessoa": pessoa, "mes": mes_b}
+        )
+        for _, row in df_editado.iterrows():
+            item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
+            if item_str:
+                val = safe_float(row['valor'])
+                query = text("INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor) VALUES (:pessoa, :item, :mes, :val)")
+                conn.execute(query, {"pessoa": pessoa, "item": item_str, "mes": mes_b, "val": val})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
 
 def salvar_comuns_futuro(df_editado, mes_inicio_tela):
-    idx_start = TODOS_MESES_TELA.index(mes_inicio_tela) if mes_inicio_tela in TODOS_MESES_TELA else 0
-    meses_afetados_tela = TODOS_MESES_TELA[idx_start:]
-    
+    # Grava EXCLUSIVAMENTE no mês de início selecionado
+    mes_b = mes_tela_para_banco(mes_inicio_tela)
     with engine.begin() as conn:
-        for m_t in meses_afetados_tela:
-            m_b = mes_tela_para_banco(m_t)
-            conn.execute(text("DELETE FROM gastos_comuns WHERE mes_ano = :mes"), {"mes": m_b})
-            for _, row in df_editado.iterrows():
-                item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
-                if item_str:
-                    val = safe_float(row['valor'])
-                    pag = str(row.get('pagador', 'Dividido (50/50)'))
-                    query = text("INSERT INTO gastos_comuns (item, mes_ano, valor, pagador) VALUES (:item, :mes, :val, :pag)")
-                    conn.execute(query, {"item": item_str, "mes": m_b, "val": val, "pag": pag})
+        conn.execute(text("DELETE FROM gastos_comuns WHERE mes_ano = :mes"), {"mes": mes_b})
+        for _, row in df_editado.iterrows():
+            item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
+            if item_str:
+                val = safe_float(row['valor'])
+                pag = str(row.get('pagador', 'Dividido (50/50)'))
+                query = text("INSERT INTO gastos_comuns (item, mes_ano, valor, pagador) VALUES (:item, :mes, :val, :pag)")
+                conn.execute(query, {"item": item_str, "mes": m_b, "val": val, "pag": pag})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
