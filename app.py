@@ -217,13 +217,20 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão com Supabase Otimizada e Anti-DuplicateStatement
+# 4. Conexão com Supabase Otimizada e Anti-DuplicateStatement Definitive Fix
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
     if not db_url:
         st.error("❌ Variável de conexão com o banco não configurada.")
         st.stop()
+
+    # Força o dialect postgresql+psycopg2 para usar o driver clássico psycopg2-binary
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif db_url.startswith("postgresql://") and "+psycopg2" not in db_url and "+psycopg" not in db_url:
+        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        
     if "sslmode" not in db_url:
         db_url += "?sslmode=require" if "?" not in db_url else "&sslmode=require"
     
@@ -233,7 +240,7 @@ def get_db_engine():
         max_overflow=3,
         pool_recycle=300,
         pool_pre_ping=True,
-        connect_args={"connect_timeout": 10},
+        connect_args={"connect_timeout": 10, "prepare_threshold": None},
         execution_options={"prepare_threshold": None}
     )
 
@@ -440,25 +447,15 @@ def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
         DO UPDATE SET valor = EXCLUDED.valor;
     ''')
     
-    params = []
-    for _, row in df_editado.iterrows():
-        item = str(row['Item'])
-        if "Total" in item:
-            continue
-        for mes_t in meses_visiveis:
-            mes_b = mes_tela_para_banco(mes_t)
-            val = safe_float(row[mes_t])
-            params.append({
-                "pessoa": pessoa,
-                "tipo": tipo,
-                "item": item,
-                "mes": mes_b,
-                "val": val
-            })
-            
     with engine.begin() as conn:
-        if params:
-            conn.execute(query, params)
+        for _, row in df_editado.iterrows():
+            item = str(row['Item'])
+            if "Total" in item:
+                continue
+            for mes_t in meses_visiveis:
+                mes_b = mes_tela_para_banco(mes_t)
+                val = safe_float(row[mes_t])
+                conn.execute(query, {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": val})
             
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
@@ -474,15 +471,12 @@ def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
                 text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"),
                 {"pessoa": pessoa, "mes": m_b}
             )
-            params = []
             for _, row in df_editado.iterrows():
                 item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
                 if item_str:
                     val = safe_float(row['valor'])
-                    params.append({"pessoa": pessoa, "item": item_str, "mes": m_b, "val": val})
-            if params:
-                query = text("INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor) VALUES (:pessoa, :item, :mes, :val)")
-                conn.execute(query, params)
+                    query = text("INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor) VALUES (:pessoa, :item, :mes, :val)")
+                    conn.execute(query, {"pessoa": pessoa, "item": item_str, "mes": m_b, "val": val})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
@@ -495,16 +489,13 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
         for m_t in meses_afetados_tela:
             m_b = mes_tela_para_banco(m_t)
             conn.execute(text("DELETE FROM gastos_comuns WHERE mes_ano = :mes"), {"mes": m_b})
-            params = []
             for _, row in df_editado.iterrows():
                 item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
                 if item_str:
                     val = safe_float(row['valor'])
                     pag = str(row.get('pagador', 'Dividido (50/50)'))
-                    params.append({"item": item_str, "mes": m_b, "val": val, "pag": pag})
-            if params:
-                query = text("INSERT INTO gastos_comuns (item, mes_ano, valor, pagador) VALUES (:item, :mes, :val, :pag)")
-                conn.execute(query, params)
+                    query = text("INSERT INTO gastos_comuns (item, mes_ano, valor, pagador) VALUES (:item, :mes, :val, :pag)")
+                    conn.execute(query, {"item": item_str, "mes": m_b, "val": val, "pag": pag})
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
@@ -581,16 +572,12 @@ def salvar_caixinha(df_editado, mes_atual_foco):
         DO UPDATE SET valor = EXCLUDED.valor;
     ''')
     
-    params = []
-    for _, row in df_editado.iterrows():
-        mes_t = row['Mês']
-        mes_b = mes_tela_para_banco(mes_t)
-        val = safe_float(row['Aporte do Mês (R$)'])
-        params.append({"mes": mes_b, "val": val})
-        
     with engine.begin() as conn:
-        if params:
-            conn.execute(query, params)
+        for _, row in df_editado.iterrows():
+            mes_t = row['Mês']
+            mes_b = mes_tela_para_banco(mes_t)
+            val = safe_float(row['Aporte do Mês (R$)'])
+            conn.execute(query, {"mes": mes_b, "val": val})
             
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
@@ -598,16 +585,13 @@ def salvar_caixinha(df_editado, mes_atual_foco):
 def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM programado_cartao WHERE pessoa = :pessoa"), {"pessoa": pessoa})
-        params = []
+        query = text("INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)")
         for _, row in df_editado.iterrows():
             if pd.notnull(row.get('descricao')) and str(row['descricao']).strip():
                 cartao_val = str(row['cartao']) if pd.notnull(row.get('cartao')) else ESTRUTURA_CARTÕES_BASE[pessoa][0]
                 desc_val = str(row['descricao'])
                 val_val = safe_float(row.get('valor'))
-                params.append({"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
-        if params:
-            query = text("INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)")
-            conn.execute(query, params)
+                conn.execute(query, {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
             
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
@@ -711,7 +695,7 @@ dados_financeiros = calcular_sequencia_financeira()
 
 # MENU LATERAL (SIDEBAR)
 with st.sidebar:
-    st.markdown("### ⚙️ Menu de Controle")
+    st.markdown("### ⚙️️ Menu de Controle")
 
     modo_visao = st.radio("Modo de Navegação:", ["⚡ Modo Rápido (Dia a Dia)", "📈 Projeção Longo Prazo"], index=0)
 
