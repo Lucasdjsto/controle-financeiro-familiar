@@ -217,7 +217,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão com Supabase Otimizada e Anti-DuplicateStatement Definitive Fix
+# 4. Conexão com Supabase Otimizada
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -225,7 +225,6 @@ def get_db_engine():
         st.error("❌ Variável de conexão com o banco não configurada.")
         st.stop()
 
-    # Força o dialect postgresql+psycopg2 para usar o driver clássico psycopg2-binary
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
     elif db_url.startswith("postgresql://") and "+psycopg2" not in db_url and "+psycopg" not in db_url:
@@ -671,7 +670,8 @@ def calcular_sequencia_financeira():
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
         saldo_herdeiro_abertura = saldo_acumulado_anterior
-        saldo_disponivel_hoje = saldo_herdeiro_abertura + receita_pontual_mes - gasto_pontual_mes
+        # AJUSTE SOLICITADO: Aporte para Caixinha sai do Saldo Disponível Hoje
+        saldo_disponivel_hoje = saldo_herdeiro_abertura + receita_pontual_mes - gasto_pontual_mes - caixinha_mes
         
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
         patrimonio_total_final = saldo_conta_final + caixinha_acumulada_geral
@@ -695,7 +695,7 @@ dados_financeiros = calcular_sequencia_financeira()
 
 # MENU LATERAL (SIDEBAR)
 with st.sidebar:
-    st.markdown("### ⚙️️ Menu de Controle")
+    st.markdown("### ⚙️ Menu de Controle")
 
     modo_visao = st.radio("Modo de Navegação:", ["⚡ Modo Rápido (Dia a Dia)", "📈 Projeção Longo Prazo"], index=0)
 
