@@ -11,10 +11,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. CSS Customizado Otimizado (Sem Cortes de Texto e Layout Responsivo)
+# 2. CSS Customizado Otimizado
 st.markdown("""
     <style>
-        /* Respiro do topo para evitar corte do título */
         .block-container {
             padding-top: 2.2rem !important;
             padding-bottom: 0.8rem !important;
@@ -22,7 +21,6 @@ st.markdown("""
             padding-right: 0.5rem !important;
         }
         
-        /* Fontes e altura de linha para H1, H2 e H3 do Streamlit */
         h1 {
             font-size: 1.5rem !important;
             line-height: 1.3 !important;
@@ -219,7 +217,7 @@ def verificar_senha():
 if not verificar_senha():
     st.stop()
 
-# 4. Conexão com Supabase Otimizada
+# 4. Conexão com Supabase Otimizada e Anti-DuplicateStatement
 @st.cache_resource
 def get_db_engine():
     db_url = os.getenv("POSTGRES_URL") or st.secrets.get("postgres", {}).get("url")
@@ -235,7 +233,8 @@ def get_db_engine():
         max_overflow=3,
         pool_recycle=300,
         pool_pre_ping=True,
-        connect_args={"connect_timeout": 10}
+        connect_args={"connect_timeout": 10},
+        execution_options={"prepare_threshold": None}
     )
 
 engine = get_db_engine()
@@ -270,7 +269,6 @@ def init_db():
                     id SERIAL PRIMARY KEY, mes_ano TEXT, pessoa TEXT, descricao TEXT, categoria TEXT, valor DOUBLE PRECISION DEFAULT 0
                 );
             '''))
-            # Nova Tabela: Receitas Esporádicas / Rápidas
             conn.execute(text('''
                 CREATE TABLE IF NOT EXISTS pontuais_receitas (
                     id SERIAL PRIMARY KEY, mes_ano TEXT, pessoa TEXT, descricao TEXT, categoria TEXT, valor DOUBLE PRECISION DEFAULT 0
@@ -435,21 +433,33 @@ def salvar_projecao_direta(pessoa, tipo, item, mes_tela, valor):
     st.cache_data.clear()
 
 def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
+    query = text('''
+        INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
+        VALUES (:pessoa, :tipo, :item, :mes, :val)
+        ON CONFLICT (pessoa, tipo, item, mes_ano) 
+        DO UPDATE SET valor = EXCLUDED.valor;
+    ''')
+    
+    params = []
+    for _, row in df_editado.iterrows():
+        item = str(row['Item'])
+        if "Total" in item:
+            continue
+        for mes_t in meses_visiveis:
+            mes_b = mes_tela_para_banco(mes_t)
+            val = safe_float(row[mes_t])
+            params.append({
+                "pessoa": pessoa,
+                "tipo": tipo,
+                "item": item,
+                "mes": mes_b,
+                "val": val
+            })
+            
     with engine.begin() as conn:
-        for _, row in df_editado.iterrows():
-            item = str(row['Item'])
-            if "Total" in item:
-                continue
-            for mes_t in meses_visiveis:
-                mes_b = mes_tela_para_banco(mes_t)
-                val = safe_float(row[mes_t])
-                query = '''
-                    INSERT INTO projecao (pessoa, tipo, item, mes_ano, valor)
-                    VALUES (:pessoa, :tipo, :item, :mes, :val)
-                    ON CONFLICT (pessoa, tipo, item, mes_ano) 
-                    DO UPDATE SET valor = EXCLUDED.valor;
-                '''
-                conn.execute(text(query), {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": val})
+        if params:
+            conn.execute(query, params)
+            
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
@@ -614,11 +624,11 @@ def calcular_sequencia_financeira():
 
         tot_fixos = fix_p1 + fix_p2 + comuns_val_total
 
-        # Receitas Fixas Programadas
+        # Receitas Fixas
         r_p1_fixa = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
         r_p2_fixa = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
 
-        # Receitas Rápidas / Esporádicas do Mês
+        # Receitas Esporádicas
         rec_df = df_rec_pontuais_all[df_rec_pontuais_all['mes_ano'] == m_b] if not df_rec_pontuais_all.empty else pd.DataFrame()
         r_p1_pont = rec_df[rec_df['pessoa'] == 'Pessoa 1']['valor'].apply(safe_float).sum() if not rec_df.empty else 0.0
         r_p2_pont = rec_df[rec_df['pessoa'] == 'Pessoa 2']['valor'].apply(safe_float).sum() if not rec_df.empty else 0.0
@@ -1015,7 +1025,7 @@ else:
                     c_g1.write(f"**{g['descricao']}**")
                     c_g2.write(f"🏷️ {g['categoria']}")
                     c_g3.write(f"**- R$ {safe_float(g['valor']):,.2f}**")
-                    if c_g4.button("🗑️", key=f"del_{g['id']}"):
+                    if c_g4.button("🗑️️", key=f"del_{g['id']}"):
                         deletar_gasto_pontual(g['id'])
                         st.rerun()
             else:
@@ -1102,7 +1112,6 @@ else:
                 "sobra_mes_isolada": 0.0, "saldo_acumulado_final": 0.0, "patrimonio_total_final": 0.0
             })
             
-            # Formatação ISO (AAAA-MM) para garantir a ordenação cronológica rigorosa no gráfico
             m_num, y_num = map(int, m_t.split("."))
             mes_iso = f"{y_num:04d}-{m_num:02d}"
 
