@@ -474,12 +474,15 @@ def salvar_fixos_futuro(pessoa, df_editado, mes_inicio_tela):
                 text("DELETE FROM gastos_fixos WHERE pessoa = :pessoa AND mes_ano = :mes"),
                 {"pessoa": pessoa, "mes": m_b}
             )
+            params = []
             for _, row in df_editado.iterrows():
                 item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
                 if item_str:
                     val = safe_float(row['valor'])
-                    query = text("INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor) VALUES (:pessoa, :item, :mes, :val)")
-                    conn.execute(query, {"pessoa": pessoa, "item": item_str, "mes": m_b, "val": val})
+                    params.append({"pessoa": pessoa, "item": item_str, "mes": m_b, "val": val})
+            if params:
+                query = text("INSERT INTO gastos_fixos (pessoa, item, mes_ano, valor) VALUES (:pessoa, :item, :mes, :val)")
+                conn.execute(query, params)
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
@@ -492,13 +495,16 @@ def salvar_comuns_futuro(df_editado, mes_inicio_tela):
         for m_t in meses_afetados_tela:
             m_b = mes_tela_para_banco(m_t)
             conn.execute(text("DELETE FROM gastos_comuns WHERE mes_ano = :mes"), {"mes": m_b})
+            params = []
             for _, row in df_editado.iterrows():
                 item_str = str(row['item']).strip() if pd.notnull(row.get('item')) else ""
                 if item_str:
                     val = safe_float(row['valor'])
                     pag = str(row.get('pagador', 'Dividido (50/50)'))
-                    query = text("INSERT INTO gastos_comuns (item, mes_ano, valor, pagador) VALUES (:item, :mes, :val, :pag)")
-                    conn.execute(query, {"item": item_str, "mes": m_b, "val": val, "pag": pag})
+                    params.append({"item": item_str, "mes": m_b, "val": val, "pag": pag})
+            if params:
+                query = text("INSERT INTO gastos_comuns (item, mes_ano, valor, pagador) VALUES (:item, :mes, :val, :pag)")
+                conn.execute(query, params)
                     
     salvar_ultimo_mes_banco(mes_inicio_tela)
     st.cache_data.clear()
@@ -568,31 +574,41 @@ def deletar_receita_pontual(rec_id):
     st.cache_data.clear()
 
 def salvar_caixinha(df_editado, mes_atual_foco):
+    query = text('''
+        INSERT INTO caixinha (mes_ano, valor)
+        VALUES (:mes, :val)
+        ON CONFLICT (mes_ano)
+        DO UPDATE SET valor = EXCLUDED.valor;
+    ''')
+    
+    params = []
+    for _, row in df_editado.iterrows():
+        mes_t = row['Mês']
+        mes_b = mes_tela_para_banco(mes_t)
+        val = safe_float(row['Aporte do Mês (R$)'])
+        params.append({"mes": mes_b, "val": val})
+        
     with engine.begin() as conn:
-        for _, row in df_editado.iterrows():
-            mes_t = row['Mês']
-            mes_b = mes_tela_para_banco(mes_t)
-            val = safe_float(row['Aporte do Mês (R$)'])
-            query = '''
-                INSERT INTO caixinha (mes_ano, valor)
-                VALUES (:mes, :val)
-                ON CONFLICT (mes_ano)
-                DO UPDATE SET valor = EXCLUDED.valor;
-            '''
-            conn.execute(text(query), {"mes": mes_b, "val": val})
+        if params:
+            conn.execute(query, params)
+            
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
 def salvar_programado_cartao(pessoa, df_editado, mes_atual_foco):
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM programado_cartao WHERE pessoa = :pessoa"), {"pessoa": pessoa})
+        params = []
         for _, row in df_editado.iterrows():
             if pd.notnull(row.get('descricao')) and str(row['descricao']).strip():
                 cartao_val = str(row['cartao']) if pd.notnull(row.get('cartao')) else ESTRUTURA_CARTÕES_BASE[pessoa][0]
                 desc_val = str(row['descricao'])
                 val_val = safe_float(row.get('valor'))
-                query = "INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)"
-                conn.execute(text(query), {"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
+                params.append({"pessoa": pessoa, "cartao": cartao_val, "desc": desc_val, "val": val_val})
+        if params:
+            query = text("INSERT INTO programado_cartao (pessoa, cartao, descricao, valor) VALUES (:pessoa, :cartao, :desc, :val)")
+            conn.execute(query, params)
+            
     salvar_ultimo_mes_banco(mes_atual_foco)
     st.cache_data.clear()
 
@@ -1025,7 +1041,7 @@ else:
                     c_g1.write(f"**{g['descricao']}**")
                     c_g2.write(f"🏷️ {g['categoria']}")
                     c_g3.write(f"**- R$ {safe_float(g['valor']):,.2f}**")
-                    if c_g4.button("🗑️️", key=f"del_{g['id']}"):
+                    if c_g4.button("🗑️", key=f"del_{g['id']}"):
                         deletar_gasto_pontual(g['id'])
                         st.rerun()
             else:
