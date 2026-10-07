@@ -448,12 +448,12 @@ def salvar_projecao(pessoa, tipo, df_editado, meses_visiveis, mes_atual_foco):
     
     with engine.begin() as conn:
         for _, row in df_editado.iterrows():
-            item = str(row['Item'])
+            item = str(row['Item']).strip()
             if "Total" in item:
                 continue
             for mes_t in meses_visiveis:
                 mes_b = mes_tela_para_banco(mes_t)
-                val = safe_float(row[mes_t])
+                val = safe_float(row.get(mes_t, 0.0))
                 conn.execute(query, {"pessoa": pessoa, "tipo": tipo, "item": item, "mes": mes_b, "val": val})
             
     salvar_ultimo_mes_banco(mes_atual_foco)
@@ -623,9 +623,16 @@ def calcular_sequencia_financeira():
 
         tot_fixos = fix_p1 + fix_p2 + comuns_val_total
 
-        # Receitas Fixas
-        r_p1_fixa = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
-        r_p2_fixa = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]['valor'].apply(safe_float).sum() if not df_proj_all.empty else 0.0
+        # Receitas Fixas Filtro Estrito por Item Cadastrado
+        if not df_proj_all.empty:
+            df_r_p1 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 1') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]
+            r_p1_fixa = df_r_p1['valor'].apply(safe_float).sum()
+            
+            df_r_p2 = df_proj_all[(df_proj_all['mes_ano'] == m_b) & (df_proj_all['pessoa'] == 'Pessoa 2') & (df_proj_all['tipo'] == 'RECEITA') & (df_proj_all['item'].isin(ESTRUTURA_RECEITAS))]
+            r_p2_fixa = df_r_p2['valor'].apply(safe_float).sum()
+        else:
+            r_p1_fixa = 0.0
+            r_p2_fixa = 0.0
 
         # Receitas Esporádicas
         rec_df = df_rec_pontuais_all[df_rec_pontuais_all['mes_ano'] == m_b] if not df_rec_pontuais_all.empty else pd.DataFrame()
@@ -670,7 +677,6 @@ def calcular_sequencia_financeira():
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
         saldo_herdeiro_abertura = saldo_acumulado_anterior
-        # AJUSTE SOLICITADO: Aporte para Caixinha sai do Saldo Disponível Hoje
         saldo_disponivel_hoje = saldo_herdeiro_abertura + receita_pontual_mes - gasto_pontual_mes - caixinha_mes
         
         saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
@@ -927,7 +933,7 @@ else:
             conf_rec["Item"] = st.column_config.TextColumn("Item / Descrição", disabled=True)
 
             df_rec_edit = st.data_editor(
-                df_rec_grid, num_rows="fixed", use_container_width=True, key=f"editor_rec_{p_code}", height=190,
+                df_rec_grid, num_rows="fixed", use_container_width=True, key=f"editor_rec_{p_code}", height=230,
                 column_config=conf_rec
             )
 
