@@ -673,13 +673,22 @@ def calcular_sequencia_financeira():
         caixinha_mes = df_caixinha_all[df_caixinha_all['mes_ano'] == m_b]['valor'].apply(safe_float).sum() if not df_caixinha_all.empty else 0.0
         caixinha_acumulada_geral += caixinha_mes
 
-        saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + gasto_pontual_mes + caixinha_mes
+        # Saídas reais (Despesas) NÃO incluem a caixinha
+        saidas_mes = (c_p1 + c_p2 + add_prog_p1 + add_prog_p2) + tot_fixos + gasto_pontual_mes
+        
+        # Sobra líquida operacional do mês (Receitas - Despesas de fato)
         sobra_do_mes_bruta = renda_mes - saidas_mes
         
         saldo_herdeiro_abertura = saldo_acumulado_anterior
+        
+        # Saldo Disponível Hoje em Conta: deduz despesas e o aporte da Caixinha
         saldo_disponivel_hoje = saldo_herdeiro_abertura + receita_pontual_mes - gasto_pontual_mes - caixinha_mes
         
-        saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta
+        # Saldo Final Previsto na Conta Corrente no fim do mês:
+        # Pega o saldo que sobrou após pagar despesas e transferir para a caixinha
+        saldo_conta_final = saldo_acumulado_anterior + sobra_do_mes_bruta - caixinha_mes
+        
+        # Patrimônio Total Geral engloba a Conta Corrente + Reserva Acumulada
         patrimonio_total_final = saldo_conta_final + caixinha_acumulada_geral
 
         dados_meses[m_t] = {
@@ -1124,7 +1133,7 @@ else:
             chart_data_list.append({
                 "Mês": mes_iso,
                 "Receitas": d["renda_mes"],
-                "Despesas": d["saidas_mes"] - d["caixinha_mes"],
+                "Despesas": d["saidas_mes"],
                 "Sobra Líquida": d["sobra_mes_isolada"],
                 "Saldo Previsto": d["saldo_acumulado_final"],
                 "Patrimônio Total": d["patrimonio_total_final"]
@@ -1165,7 +1174,7 @@ else:
                 row_sal_ini[m_t] = d["saldo_anterior"]
                 row_sal_disp[m_t] = d["saldo_disponivel_hoje"]
                 row_rec[m_t] = d["renda_mes"]
-                row_desp[m_t] = d["saidas_mes"] - d["caixinha_mes"]
+                row_desp[m_t] = d["saidas_mes"]
                 row_caixinha[m_t] = d["caixinha_mes"]
                 row_sobra_mes[m_t] = d["sobra_mes_isolada"]
                 row_sal_fim[m_t] = d["saldo_acumulado_final"]
